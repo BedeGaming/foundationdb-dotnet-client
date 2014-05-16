@@ -88,7 +88,7 @@ namespace FoundationDB.Client.Native
 			// Cluster
 
 			[DllImport(FDB_C_DLL, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-			public static extern FutureHandle fdb_create_cluster([MarshalAs(UnmanagedType.LPStr)] string clusterFilePath);
+			public static extern IntPtr fdb_create_cluster([MarshalAs(UnmanagedType.LPStr)] string clusterFilePath);
 
 			[DllImport(FDB_C_DLL, CallingConvention = CallingConvention.Cdecl)]
 			public static extern void fdb_cluster_destroy(IntPtr cluster);
@@ -410,11 +410,13 @@ namespace FoundationDB.Client.Native
 
 		public static FutureHandle CreateCluster(string path)
 		{
-			var future = NativeMethods.fdb_create_cluster(path);
+			var handle = NativeMethods.fdb_create_cluster(path);
 #if DEBUG_NATIVE_CALLS
 			Debug.WriteLine("fdb_create_cluster(" + path + ") => 0x" + future.Handle.ToString("x"));
 #endif
-			return future;
+			var futureHandle = new FutureHandle();
+			futureHandle.TrySetHandle(handle);
+			return futureHandle;
 		}
 
 		public static void ClusterDestroy(IntPtr handle)
