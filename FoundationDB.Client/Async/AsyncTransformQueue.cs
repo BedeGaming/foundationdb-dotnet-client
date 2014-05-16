@@ -28,13 +28,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Async
 {
-	using FoundationDB.Client.Utils;
 	using System;
 	using System.Collections.Generic;
-	using System.Diagnostics;
 	using System.Runtime.ExceptionServices;
 	using System.Threading;
 	using System.Threading.Tasks;
+	using FoundationDB.Client.Utils;
 
 	/// <summary>Implements an async queue that asynchronously transform items, outputing them in arrival order, while throttling the producer</summary>
 	/// <typeparam name="TInput">Type of the input elements (from the inner async iterator)</typeparam>
@@ -67,7 +66,7 @@ namespace FoundationDB.Async
 		{
 			get
 			{
-				Debugger.NotifyOfCrossThreadDependency();
+				//Debugger.NotifyOfCrossThreadDependency();
 				lock (m_lock)
 				{
 					return m_queue.Count;
@@ -86,7 +85,7 @@ namespace FoundationDB.Async
 		{
 			get
 			{
-				Debugger.NotifyOfCrossThreadDependency();
+				//Debugger.NotifyOfCrossThreadDependency();
 				lock (m_lock)
 				{
 					return m_blockedConsumer != null && m_blockedConsumer.Task.IsCompleted;
@@ -99,7 +98,7 @@ namespace FoundationDB.Async
 		{
 			get
 			{
-				Debugger.NotifyOfCrossThreadDependency();
+				//Debugger.NotifyOfCrossThreadDependency();
 				lock (m_lock)
 				{
 					return m_blockedProducer != null && m_blockedProducer.Task.IsCompleted;
@@ -201,11 +200,11 @@ namespace FoundationDB.Async
 #if NET_4_0
 			Exception error
 #else
-			ExceptionDispatchInfo error
+ExceptionDispatchInfo error
 #endif
-		)
+)
 		{
-			lock(m_lock)
+			lock (m_lock)
 			{
 				if (m_done) throw new InvalidOperationException("OnCompleted() and OnError() can only be called once");
 				m_done = true;
@@ -251,7 +250,7 @@ namespace FoundationDB.Async
 			Task<Maybe<TOutput>> task = null;
 			Task waiter = null;
 
-			lock(m_lock)
+			lock (m_lock)
 			{
 				if (m_queue.Count > 0)
 				{
@@ -294,7 +293,7 @@ namespace FoundationDB.Async
 				//TODO: use the cancellation token !
 				return await task.ConfigureAwait(false);
 			}
-			catch(Exception e)
+			catch (Exception e)
 			{
 				return Maybe.Error<TOutput>(e);
 			}
@@ -335,7 +334,7 @@ namespace FoundationDB.Async
 					return await ReceiveWhenDoneAsync(task, ct).ConfigureAwait(false);
 				}
 
-				lock(m_lock)
+				lock (m_lock)
 				{
 					// we need to wait again
 					waiter = WaitForNextItem_NeedsLocking(ct);
@@ -359,7 +358,7 @@ namespace FoundationDB.Async
 			var batch = new List<Maybe<TOutput>>();
 
 			// consume everything that is already in the buffer
-			lock(m_lock)
+			lock (m_lock)
 			{
 				if (DrainItems_NeedsLocking(batch, count))
 				{ // got some stuff, we need to wake up any locked writer on the way out !
@@ -383,7 +382,7 @@ namespace FoundationDB.Async
 			while (batch.Count == 0)
 			{
 				Task waiter;
-				lock(m_lock)
+				lock (m_lock)
 				{
 					waiter = WaitForNextItem_NeedsLocking(ct);
 					Contract.Assert(waiter != null);
@@ -460,7 +459,7 @@ namespace FoundationDB.Async
 				waiter.Set(async: true);
 			}
 		}
-	
+
 	}
 
 }
