@@ -29,15 +29,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // enable this to help debug native calls to fdbc.dll
 #undef DEBUG_NATIVE_CALLS
 
-using FoundationDB.Client.Utils;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using FoundationDB.Client.Utils;
 
 namespace FoundationDB.Client.Native
 {
@@ -46,7 +44,7 @@ namespace FoundationDB.Client.Native
 		public const int FDB_API_VERSION = 200;
 
 		/// <summary>Name of the C API dll used for P/Invoking</summary>
-		private static readonly string FDB_C_DLL = "/usr/lib64/libfdb_c.so";
+		private const string FDB_C_DLL = "/usr/lib64/libfdb_c.so";
 
 		/// <summary>Handle on the native FDB C API library</summary>
 		private static readonly UnmanagedLibrary FdbCLib;
