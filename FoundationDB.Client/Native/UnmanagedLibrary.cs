@@ -26,11 +26,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #endregion
 
-using Microsoft.Win32.SafeHandles;
 using System;
 using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Security;
+using Microsoft.Win32.SafeHandles;
 
 namespace FoundationDB.Client.Native
 {
@@ -67,13 +67,58 @@ namespace FoundationDB.Client.Native
 			public static extern IntPtr GetProcAddress(SafeLibraryHandle hModule, String procname);
 		}
 
+		private static class NativeLinuxMethods
+		{
+			private const int RTLD_NOW = 2;
+			public static SafeLibraryHandle LoadLibrary(string fileName)
+			{
+				return dlopen(fileName, RTLD_NOW);
+			}
+
+			public static void FreeLibrary(IntPtr handle)
+			{
+				dlclose(handle);
+			}
+
+			public static IntPtr GetProcAddress(IntPtr dllHandle, string name)
+			{
+				// clear previous errors if any
+				dlerror();
+				var res = dlsym(dllHandle, name);
+				var errPtr = dlerror();
+				if (errPtr != IntPtr.Zero)
+				{
+					throw new Exception("dlsym: " + Marshal.PtrToStringAnsi(errPtr));
+				}
+				return res;
+			}
+
+			[DllImport("libdl.so")]
+			private static extern SafeLibraryHandle dlopen(string fileName, int flags);
+
+			[DllImport("libdl.so")]
+			private static extern void dlclose(IntPtr handle);
+
+			[DllImport("libdl.so")]
+			private static extern IntPtr dlsym(IntPtr dllHandle, string name);
+
+			[DllImport("libdl.so")]
+			private static extern IntPtr dlerror();
+		}
+
+		public static bool IsLinux()
+		{
+			var p = (int)Environment.OSVersion.Platform;
+			return (p == 4) || (p == 6) || (p == 128);
+		}
+
 		/// <summary>Load a native library into the current process</summary>
 		/// <param name="path">Path to the native dll.</param>
 		/// <remarks>Throws exceptions on failure. Most common failure would be file-not-found, or that the file is not a  loadable image.</remarks>
 		/// <exception cref="System.IO.FileNotFoundException">if fileName can't be found</exception>
 		public static UnmanagedLibrary LoadLibrary(string path)
 		{
-			var handle = NativeMethods.LoadLibrary(path);
+			var handle = IsLinux() ? NativeLinuxMethods.LoadLibrary(path) : NativeMethods.LoadLibrary(path);
 			if (handle == null || handle.IsInvalid)
 			{
 				int hr = Marshal.GetHRForLastWin32Error();
