@@ -410,13 +410,11 @@ namespace FoundationDB.Client.Native
 
 		public static FutureHandle CreateCluster(string path)
 		{
-			var handle = NativeMethods.fdb_create_cluster(path);
+			var future = NativeMethods.fdb_create_cluster(path);
 #if DEBUG_NATIVE_CALLS
 			Debug.WriteLine("fdb_create_cluster(" + path + ") => 0x" + future.Handle.ToString("x"));
 #endif
-			var futureHandle = new FutureHandle();
-			futureHandle.TrySetHandle(handle);
-			return futureHandle;
+			return future;
 		}
 
 		public static void ClusterDestroy(IntPtr handle)

@@ -9,7 +9,7 @@
 
 	using FoundationDB.Client.Utils;
 
-	internal static unsafe class FdbNativeLinux
+	internal unsafe class FdbNativeLinux
 	{
 		public const int FDB_API_VERSION = 200;
 
