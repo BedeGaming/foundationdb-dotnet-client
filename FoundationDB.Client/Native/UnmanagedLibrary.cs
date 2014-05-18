@@ -27,10 +27,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endregion
 
 using System;
-using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
-using System.Security;
-using Microsoft.Win32.SafeHandles;
 
 namespace FoundationDB.Client.Native
 {
@@ -38,74 +35,6 @@ namespace FoundationDB.Client.Native
 	/// <summary>Native Library Loader</summary>
 	internal sealed class UnmanagedLibrary : IDisposable
 	{
-		// See http://msdn.microsoft.com/msdnmag/issues/05/10/Reliability/ for more about safe handles.
-		[SuppressUnmanagedCodeSecurity]
-		public sealed class SafeLibraryHandle : SafeHandleZeroOrMinusOneIsInvalid
-		{
-			private SafeLibraryHandle() : base(true) { }
-
-			protected override bool ReleaseHandle()
-			{
-				return NativeMethods.FreeLibrary(handle);
-			}
-		}
-
-		[SuppressUnmanagedCodeSecurity]
-		private static class NativeMethods
-		{
-			const string KERNEL = "kernel32";
-
-			[DllImport(KERNEL, CharSet = CharSet.Auto, BestFitMapping = false, SetLastError = true)]
-			public static extern SafeLibraryHandle LoadLibrary(string fileName);
-
-			[ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
-			[DllImport(KERNEL, SetLastError = true)]
-			[return: MarshalAs(UnmanagedType.Bool)]
-			public static extern bool FreeLibrary(IntPtr hModule);
-
-			[DllImport(KERNEL, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
-			public static extern IntPtr GetProcAddress(SafeLibraryHandle hModule, String procname);
-		}
-
-		private static class NativeLinuxMethods
-		{
-			private const int RTLD_NOW = 2;
-			public static SafeLibraryHandle LoadLibrary(string fileName)
-			{
-				return dlopen(fileName, RTLD_NOW);
-			}
-
-			public static void FreeLibrary(IntPtr handle)
-			{
-				dlclose(handle);
-			}
-
-			public static IntPtr GetProcAddress(IntPtr dllHandle, string name)
-			{
-				// clear previous errors if any
-				dlerror();
-				var res = dlsym(dllHandle, name);
-				var errPtr = dlerror();
-				if (errPtr != IntPtr.Zero)
-				{
-					throw new Exception("dlsym: " + Marshal.PtrToStringAnsi(errPtr));
-				}
-				return res;
-			}
-
-			[DllImport("libdl.so")]
-			private static extern SafeLibraryHandle dlopen(string fileName, int flags);
-
-			[DllImport("libdl.so")]
-			private static extern void dlclose(IntPtr handle);
-
-			[DllImport("libdl.so")]
-			private static extern IntPtr dlsym(IntPtr dllHandle, string name);
-
-			[DllImport("libdl.so")]
-			private static extern IntPtr dlerror();
-		}
-
 		public static bool IsLinux()
 		{
 			var p = (int)Environment.OSVersion.Platform;
@@ -118,7 +47,7 @@ namespace FoundationDB.Client.Native
 		/// <exception cref="System.IO.FileNotFoundException">if fileName can't be found</exception>
 		public static UnmanagedLibrary LoadLibrary(string path)
 		{
-			var handle = IsLinux() ? NativeLinuxMethods.LoadLibrary(path) : NativeMethods.LoadLibrary(path);
+			var handle = IsLinux() ? NativeLinuxLoader.LoadLibrary(path) : NativeWinLoader.LoadLibrary(path);
 			if (handle == null || handle.IsInvalid)
 			{
 				int hr = Marshal.GetHRForLastWin32Error();
@@ -160,7 +89,7 @@ namespace FoundationDB.Client.Native
 		/// the library and then the CLR may call release on that IUnknown and it will crash.</remarks>
 		public TDelegate GetUnmanagedFunction<TDelegate>(string functionName) where TDelegate : class
 		{
-			IntPtr p = NativeMethods.GetProcAddress(this.Handle, functionName);
+			IntPtr p = NativeWinLoader.GetProcAddress(this.Handle, functionName);
 
 			// Failure is a common case, especially for adaptive code.
 			if (p == IntPtr.Zero)

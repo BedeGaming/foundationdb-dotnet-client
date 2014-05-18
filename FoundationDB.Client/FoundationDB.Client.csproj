@@ -75,6 +75,7 @@
     <Compile Include="FdbDatabaseExtensions.cs" />
     <Compile Include="FdbKeyRangeComparer.cs" />
     <Compile Include="Core\IFdbTransactionHandler.cs" />
+    <Compile Include="Native\FdbNativeMono.cs" />
     <Compile Include="Native\FdbNativeTransaction.cs" />
     <Compile Include="IFdbKey.cs" />
     <Compile Include="FdbTransactionMode.cs" />
@@ -128,6 +129,9 @@
     <Compile Include="Layers\Directories\FdbDirectoryTransactionals.cs" />
     <Compile Include="Layers\Tuples\FdbTupleEncoder`1.cs" />
     <Compile Include="Layers\Tuples\FdbTuple`4.cs" />
+    <Compile Include="Native\NativeLinuxLoader.cs" />
+    <Compile Include="Native\SafeLibraryHandle.cs" />
+    <Compile Include="Native\NativeWinLoader.cs" />
     <Compile Include="Subspaces\Fdb.Directory.cs" />
     <Compile Include="Subspaces\FdbDatabasePartition.cs" />
     <Compile Include="Layers\Directories\FdbDirectorySubspace.cs" />
