@@ -28,12 +28,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Client.Utils;
-	using FoundationDB.Layers.Tuples;
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
-	using System.Text;
+	using FoundationDB.Layers.Tuples;
 
 	/// <summary>Factory class for keys</summary>
 	public static class FdbKey
@@ -77,7 +75,7 @@ namespace FoundationDB.Client
 
 			if (lastNonFFByte < 0)
 			{
-				throw Fdb.Errors.CannotIncrementKey();
+				throw FdbErrors.CannotIncrementKey();
 			}
 
 			return new Slice(tmp, 0, lastNonFFByte + 1);
@@ -285,42 +283,42 @@ namespace FoundationDB.Client
 							switch (mode)
 							{
 								case PrettyPrintMode.End:
-								{ // the last byte will either be FF, or incremented
-									// for tuples, the really bad cases are for byte[]/strings (which normally end with 00)
-									// => pack(("string",))+\xFF => <02>string<00><FF>
-									// => string(("string",)) => <02>string<01>
-									switch (key[-1])
-									{
-										case 0xFF:
+									{ // the last byte will either be FF, or incremented
+										// for tuples, the really bad cases are for byte[]/strings (which normally end with 00)
+										// => pack(("string",))+\xFF => <02>string<00><FF>
+										// => string(("string",)) => <02>string<01>
+										switch (key[-1])
+										{
+											case 0xFF:
+												{
+													tuple = FoundationDB.Layers.Tuples.FdbTuple.Unpack(key[0, -1]);
+													suffix = ".<FF>";
+													break;
+												}
+											case 0x01:
+												{
+													var tmp = key[0, -1] + (byte)0;
+													tuple = FoundationDB.Layers.Tuples.FdbTuple.Unpack(tmp);
+													suffix = " + 1";
+													break;
+												}
+										}
+										break;
+									}
+								case PrettyPrintMode.Begin:
+									{ // the last byte will usually be 00
+
+										// We can't really know if the tuple ended with NULL (serialized to <00>) or if a <00> was added,
+										// but since the ToRange() on tuples add a <00> we can bet on the fact that it is not part of the tuple itself.
+										// except maybe if we have "00 FF 00" which would be the expected form of a string that ends with a <00>
+
+										if (key.Count > 2 && key[-1] == 0 && key[-2] != 0xFF)
 										{
 											tuple = FoundationDB.Layers.Tuples.FdbTuple.Unpack(key[0, -1]);
-											suffix = ".<FF>";
-											break;
+											suffix = ".<00>";
 										}
-										case 0x01:
-										{
-											var tmp = key[0, -1] + (byte)0;
-											tuple = FoundationDB.Layers.Tuples.FdbTuple.Unpack(tmp);
-											suffix = " + 1";
-											break;
-										}
+										break;
 									}
-									break;
-								}
-								case PrettyPrintMode.Begin:
-								{ // the last byte will usually be 00
-
-									// We can't really know if the tuple ended with NULL (serialized to <00>) or if a <00> was added,
-									// but since the ToRange() on tuples add a <00> we can bet on the fact that it is not part of the tuple itself.
-									// except maybe if we have "00 FF 00" which would be the expected form of a string that ends with a <00>
-
-									if (key.Count > 2 && key[-1] == 0 && key[-2] != 0xFF)
-									{
-										tuple = FoundationDB.Layers.Tuples.FdbTuple.Unpack(key[0, -1]);
-										suffix = ".<00>";
-									}
-									break;
-								}
 							}
 						}
 						catch (Exception e)

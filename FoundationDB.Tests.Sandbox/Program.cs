@@ -160,7 +160,7 @@ namespace FoundationDB.Tests.Sandbox
 		private static async Task MainAsync(CancellationToken ct)
 		{
 			// change the path to the native lib if not default
-			if (NATIVE_PATH != null) Fdb.Options.SetNativeLibPath(NATIVE_PATH);
+			if (NATIVE_PATH != null) Fdb.FdbOptions.SetNativeLibPath(NATIVE_PATH);
 
 			// uncomment this to enable network thread tracing
 			// FdbCore.TracePath = Path.Combine(Path.GetTempPath(), "fdb");

@@ -30,16 +30,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Client.Native;
-	using FoundationDB.Client.Utils;
-	using FoundationDB.Layers.Directories;
-	using FoundationDB.Layers.Tuples;
 	using System;
 	using System.Diagnostics;
-	using System.IO;
 	using System.Runtime.CompilerServices;
 	using System.Threading;
 	using System.Threading.Tasks;
+	using FoundationDB.Client.Native;
+	using FoundationDB.Client.Utils;
 	using SystemIO = System.IO;
 
 	/// <summary>FoundationDB binding</summary>
@@ -158,12 +155,12 @@ namespace FoundationDB.Client
 			if (msg == null) throw new FdbException(code, String.Format("Unexpected error code {0}", ((int)code).ToString()));
 
 			//TODO: create a custom FdbException to be able to store the error code and error message
-			switch(code)
+			switch (code)
 			{
 				case FdbError.TimedOut: return new TimeoutException("Operation timed out");
 				case FdbError.LargeAllocFailed: return new OutOfMemoryException("Large block allocation failed");
 				//TODO!
-				default: 
+				default:
 					return new FdbException(code, msg);
 			}
 		}
@@ -365,7 +362,7 @@ namespace FoundationDB.Client
 #if DEBUG_THREADS
 			if (Debugger.IsAttached) Debugger.Break();
 #endif
-			throw Fdb.Errors.CannotExecuteOnNetworkThread();
+			throw FdbErrors.CannotExecuteOnNetworkThread();
 		}
 
 		#endregion
@@ -527,76 +524,76 @@ namespace FoundationDB.Client
 				switch (err)
 				{
 					case FdbError.ApiVersionNotSupported:
-					{ // bad version was selected ?
-						// note: we already bound check the values before, so that means that fdb_c.dll is either an older version or an incompatible new version.
-						throw new FdbException(err, String.Format("The API version {0} is not supported by the FoundationDB client library (fdb_c.dll) installed on this system. The binding only supports versions {1} to {2}. You either need to upgrade the .NET binding or the FoundationDB client library to a newer version.", apiVersion, GetMinApiVersion(), GetMaxApiVersion()));
-					}
+						{ // bad version was selected ?
+							// note: we already bound check the values before, so that means that fdb_c.dll is either an older version or an incompatible new version.
+							throw new FdbException(err, String.Format("The API version {0} is not supported by the FoundationDB client library (fdb_c.dll) installed on this system. The binding only supports versions {1} to {2}. You either need to upgrade the .NET binding or the FoundationDB client library to a newer version.", apiVersion, GetMinApiVersion(), GetMaxApiVersion()));
+						}
 #if DEBUG
 					case FdbError.ApiVersionAlreadySet:
-					{ // Temporary hack to allow multiple debugging using the cached host process in VS
-						Console.WriteLine("REUSING EXISTING PROCESS! IF THINGS BREAK IN WEIRD WAYS, PLEASE RESTART THE PROCESS!");
-						err = FdbError.Success;
-						break;
-					}
+						{ // Temporary hack to allow multiple debugging using the cached host process in VS
+							Console.WriteLine("REUSING EXISTING PROCESS! IF THINGS BREAK IN WEIRD WAYS, PLEASE RESTART THE PROCESS!");
+							err = FdbError.Success;
+							break;
+						}
 #endif
 				}
 				DieOnError(err);
 			}
 			s_apiVersion = apiVersion;
-			
-			if (!string.IsNullOrWhiteSpace(Fdb.Options.TracePath))
+
+			if (!string.IsNullOrWhiteSpace(Fdb.FdbOptions.TracePath))
 			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will trace client activity in '{0}'", Fdb.Options.TracePath));
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will trace client activity in '{0}'", Fdb.FdbOptions.TracePath));
 				// create trace directory if missing...
-				if (!SystemIO.Directory.Exists(Fdb.Options.TracePath)) SystemIO.Directory.CreateDirectory(Fdb.Options.TracePath);
+				if (!SystemIO.Directory.Exists(Fdb.FdbOptions.TracePath)) SystemIO.Directory.CreateDirectory(Fdb.FdbOptions.TracePath);
 
-				DieOnError(SetNetworkOption(FdbNetworkOption.TraceEnable, Fdb.Options.TracePath));
+				DieOnError(SetNetworkOption(FdbNetworkOption.TraceEnable, Fdb.FdbOptions.TracePath));
 			}
 
-			if (!string.IsNullOrWhiteSpace(Fdb.Options.TLSPlugin))
+			if (!string.IsNullOrWhiteSpace(Fdb.FdbOptions.TLSPlugin))
 			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will use custom TLS plugin '{0}'", Fdb.Options.TLSPlugin));
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will use custom TLS plugin '{0}'", Fdb.FdbOptions.TLSPlugin));
 
-				DieOnError(SetNetworkOption(FdbNetworkOption.TLSPlugin, Fdb.Options.TLSPlugin));
+				DieOnError(SetNetworkOption(FdbNetworkOption.TLSPlugin, Fdb.FdbOptions.TLSPlugin));
 			}
 
-			if (Fdb.Options.TLSCertificateBytes.IsPresent)
+			if (Fdb.FdbOptions.TLSCertificateBytes.IsPresent)
 			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS root certificate and private key from memory ({0} bytes)", Fdb.Options.TLSCertificateBytes.Count));
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS root certificate and private key from memory ({0} bytes)", Fdb.FdbOptions.TLSCertificateBytes.Count));
 
-				DieOnError(SetNetworkOption(FdbNetworkOption.TLSCertBytes, Fdb.Options.TLSCertificateBytes));
+				DieOnError(SetNetworkOption(FdbNetworkOption.TLSCertBytes, Fdb.FdbOptions.TLSCertificateBytes));
 			}
-			else if (!string.IsNullOrWhiteSpace(Fdb.Options.TLSCertificatePath))
+			else if (!string.IsNullOrWhiteSpace(Fdb.FdbOptions.TLSCertificatePath))
 			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS root certificate and private key from '{0}'", Fdb.Options.TLSCertificatePath));
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS root certificate and private key from '{0}'", Fdb.FdbOptions.TLSCertificatePath));
 
-				DieOnError(SetNetworkOption(FdbNetworkOption.TLSCertPath, Fdb.Options.TLSCertificatePath));
-			}
-
-			if (Fdb.Options.TLSPrivateKeyBytes.IsPresent)
-			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS private key from memory ({0} bytes)", Fdb.Options.TLSPrivateKeyBytes.Count));
-
-				DieOnError(SetNetworkOption(FdbNetworkOption.TLSKeyBytes, Fdb.Options.TLSPrivateKeyBytes));
-			}
-			else if (!string.IsNullOrWhiteSpace(Fdb.Options.TLSPrivateKeyPath))
-			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS private key from '{0}'", Fdb.Options.TLSPrivateKeyPath));
-
-				DieOnError(SetNetworkOption(FdbNetworkOption.TLSKeyPath, Fdb.Options.TLSPrivateKeyPath));
+				DieOnError(SetNetworkOption(FdbNetworkOption.TLSCertPath, Fdb.FdbOptions.TLSCertificatePath));
 			}
 
-			if (Fdb.Options.TLSVerificationPattern.IsPresent)
+			if (Fdb.FdbOptions.TLSPrivateKeyBytes.IsPresent)
 			{
-				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will verify TLS peers with pattern '{0}'", Fdb.Options.TLSVerificationPattern));
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS private key from memory ({0} bytes)", Fdb.FdbOptions.TLSPrivateKeyBytes.Count));
 
-				DieOnError(SetNetworkOption(FdbNetworkOption.TLSVerifyPeers, Fdb.Options.TLSVerificationPattern));
+				DieOnError(SetNetworkOption(FdbNetworkOption.TLSKeyBytes, Fdb.FdbOptions.TLSPrivateKeyBytes));
+			}
+			else if (!string.IsNullOrWhiteSpace(Fdb.FdbOptions.TLSPrivateKeyPath))
+			{
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will load TLS private key from '{0}'", Fdb.FdbOptions.TLSPrivateKeyPath));
+
+				DieOnError(SetNetworkOption(FdbNetworkOption.TLSKeyPath, Fdb.FdbOptions.TLSPrivateKeyPath));
+			}
+
+			if (Fdb.FdbOptions.TLSVerificationPattern.IsPresent)
+			{
+				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will verify TLS peers with pattern '{0}'", Fdb.FdbOptions.TLSVerificationPattern));
+
+				DieOnError(SetNetworkOption(FdbNetworkOption.TLSVerifyPeers, Fdb.FdbOptions.TLSVerificationPattern));
 			}
 
 			try { }
 			finally
 			{
-			
+
 				// register with the AppDomain to ensure that everyting is cleared when the process exists
 				s_appDomainUnloadHandler = (sender, args) =>
 				{

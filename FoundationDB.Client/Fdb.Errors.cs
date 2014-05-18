@@ -28,56 +28,53 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Client.Utils;
 	using System;
+	using FoundationDB.Client.Utils;
 
-	public static partial class Fdb
+	internal static class FdbErrors
 	{
 
-		internal static class Errors
+		internal static Exception CannotExecuteOnNetworkThread()
 		{
+			return new InvalidOperationException("Cannot commit transaction from the Network Thread!");
+		}
 
-			internal static Exception CannotExecuteOnNetworkThread()
-			{
-				return new InvalidOperationException("Cannot commit transaction from the Network Thread!");
-			}
+		#region Keys / Values...
 
-			#region Keys / Values...
+		internal static Exception KeyCannotBeNull(string paramName = "key")
+		{
+			return new ArgumentException("Key cannot be null.", paramName);
+		}
 
-			internal static Exception KeyCannotBeNull(string paramName = "key")
-			{
-				return new ArgumentException("Key cannot be null.", paramName);
-			}
+		internal static Exception KeyIsTooBig(Slice key, string paramName = "key")
+		{
+			return new ArgumentException(String.Format("Key is too big ({0} > {1}).", key.Count.ToString(), Fdb.MaxKeySize.ToString()), paramName);
+		}
 
-			internal static Exception KeyIsTooBig(Slice key, string paramName = "key")
-			{
-				return new ArgumentException(String.Format("Key is too big ({0} > {1}).", key.Count.ToString(), Fdb.MaxKeySize.ToString()), paramName);
-			}
+		internal static Exception ValueCannotBeNull(Slice value, string paramName = "value")
+		{
+			throw new ArgumentException("Value cannot be null", paramName);
+		}
 
-			internal static Exception ValueCannotBeNull(Slice value, string paramName = "value")
-			{
-				throw new ArgumentException("Value cannot be null", paramName);
-			}
+		internal static Exception ValueIsTooBig(Slice value, string paramName = "value")
+		{
+			throw new ArgumentException(String.Format("Value is too big ({0} > {1}).", value.Count.ToString(), Fdb.MaxValueSize.ToString()), paramName);
+		}
 
-			internal static Exception ValueIsTooBig(Slice value, string paramName = "value")
-			{
-				throw new ArgumentException(String.Format("Value is too big ({0} > {1}).", value.Count.ToString(), Fdb.MaxValueSize.ToString()), paramName);
-			}
-
-			internal static Exception InvalidKeyOutsideDatabaseNamespace(IFdbDatabase db, Slice key)
-			{
-				Contract.Requires(db != null);
-				return new FdbException(
-					FdbError.KeyOutsideLegalRange,
+		internal static Exception InvalidKeyOutsideDatabaseNamespace(IFdbDatabase db, Slice key)
+		{
+			Contract.Requires(db != null);
+			return new FdbException(
+				FdbError.KeyOutsideLegalRange,
 #if DEBUG
-					String.Format("An attempt was made to use a key '{2}' that is outside of the global namespace {0} of database '{1}'", db.GlobalSpace.ToString(), db.Name, key.ToString())
+ String.Format("An attempt was made to use a key '{2}' that is outside of the global namespace {0} of database '{1}'", db.GlobalSpace.ToString(), db.Name, key.ToString())
 #else
 					String.Format("An attempt was made to use a key that is outside of the global namespace {0} of database '{1}'", db.GlobalSpace.ToString(), db.Name)
 #endif
-				);
-			}
+);
+		}
 
-			#endregion
+		#endregion
 
 #if DEPRECATED
 			internal static Exception CannotCreateTransactionOnInvalidDatabase()
@@ -86,18 +83,15 @@ namespace FoundationDB.Client
 			}
 #endif
 
-			internal static Exception FailedToRegisterTransactionOnDatabase(IFdbTransaction transaction, FdbDatabase db)
-			{
-				Contract.Requires(transaction != null && db != null);
-				return new InvalidOperationException(String.Format("Failed to register transaction #{0} with this instance of database {1}", transaction.Id.ToString(), db.Name));
-			}
-
-			internal static Exception CannotIncrementKey()
-			{
-				return new ArgumentException("Key must contain at least one byte not equal to 0xFF");
-			}
+		internal static Exception FailedToRegisterTransactionOnDatabase(IFdbTransaction transaction, FdbDatabase db)
+		{
+			Contract.Requires(transaction != null && db != null);
+			return new InvalidOperationException(String.Format("Failed to register transaction #{0} with this instance of database {1}", transaction.Id.ToString(), db.Name));
 		}
 
+		internal static Exception CannotIncrementKey()
+		{
+			return new ArgumentException("Key must contain at least one byte not equal to 0xFF");
+		}
 	}
-
 }

@@ -28,16 +28,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client.Tests
 {
-	using FoundationDB.Client;
-	using FoundationDB.Layers.Directories;
-	using FoundationDB.Layers.Tuples;
-	using NUnit.Framework;
 	using System;
 	using System.Collections.Generic;
 	using System.Diagnostics;
 	using System.Linq;
 	using System.Threading;
 	using System.Threading.Tasks;
+	using FoundationDB.Client;
+	using FoundationDB.Layers.Directories;
+	using FoundationDB.Layers.Tuples;
+	using NUnit.Framework;
 
 	[TestFixture]
 	public class DatabaseBulkFacts : FdbTest
@@ -66,7 +66,7 @@ namespace FoundationDB.Client.Tests
 				var sw = Stopwatch.StartNew();
 				long? lastReport = null;
 				int called = 0;
-				long count = await Fdb.Bulk.WriteAsync(
+				long count = await FdbBulk.WriteAsync(
 					db,
 					data,
 					new Progress<long>((n) =>
@@ -125,7 +125,7 @@ namespace FoundationDB.Client.Tests
 				long called = 0;
 				var uniqueKeys = new HashSet<int>();
 				var sw = Stopwatch.StartNew();
-				long count = await Fdb.Bulk.InsertAsync(
+				long count = await FdbBulk.InsertAsync(
 					db,
 					data,
 					(kv, tr) =>
@@ -159,7 +159,7 @@ namespace FoundationDB.Client.Tests
 				}, this.Cancellation);
 
 				Assert.That(stored.Length, Is.EqualTo(N), "DB contains less or more items than expected");
-				for (int i = 0; i < stored.Length;i++)
+				for (int i = 0; i < stored.Length; i++)
 				{
 					Assert.That(stored[i].Key, Is.EqualTo(location.Pack(data[i].Key)), "Key #{0}", i);
 					Assert.That(stored[i].Value.Count, Is.EqualTo(data[i].Value), "Value #{0}", i);
@@ -183,7 +183,7 @@ namespace FoundationDB.Client.Tests
 
 				Console.WriteLine("Preparing...");
 
-				await Fdb.Bulk.WriteAsync(
+				await FdbBulk.WriteAsync(
 					db,
 					Enumerable.Range(1, N).Select((x) => new KeyValuePair<Slice, Slice>(location.Pack(x), Slice.FromInt32(x))),
 					null,
@@ -196,7 +196,7 @@ namespace FoundationDB.Client.Tests
 				long count = 0;
 				int chunks = 0;
 				var sw = Stopwatch.StartNew();
-				await Fdb.Bulk.ForEachAsync(
+				await FdbBulk.ForEachAsync(
 					db,
 					Enumerable.Range(1, N).Select(x => location.Pack(x)),
 					() => FdbTuple.Create(0L, 0L),
@@ -246,7 +246,7 @@ namespace FoundationDB.Client.Tests
 
 				Console.WriteLine("Preparing...");
 
-				await Fdb.Bulk.WriteAsync(
+				await FdbBulk.WriteAsync(
 					db,
 					Enumerable.Range(1, N).Select((x) => new KeyValuePair<Slice, Slice>(location.Pack(x), Slice.FromInt32(x))),
 					null,
@@ -259,7 +259,7 @@ namespace FoundationDB.Client.Tests
 				long count = 0;
 				int chunks = 0;
 				var sw = Stopwatch.StartNew();
-				await Fdb.Bulk.ForEachAsync(
+				await FdbBulk.ForEachAsync(
 					db,
 					Enumerable.Range(1, N).Select(x => location.Pack(x)),
 					() => FdbTuple.Create(0L, 0L), // (sum, count)
@@ -312,7 +312,7 @@ namespace FoundationDB.Client.Tests
 
 				Console.WriteLine("Preparing...");
 
-				await Fdb.Bulk.WriteAsync(
+				await FdbBulk.WriteAsync(
 					db,
 					Enumerable.Range(1, N).Select((x) => new KeyValuePair<Slice, Slice>(location.Pack(x), Slice.FromInt32(x))),
 					null,
@@ -325,7 +325,7 @@ namespace FoundationDB.Client.Tests
 				long count = 0;
 				int chunks = 0;
 				var sw = Stopwatch.StartNew();
-				await Fdb.Bulk.ForEachAsync(
+				await FdbBulk.ForEachAsync(
 					db,
 					Enumerable.Range(1, N).Select(x => location.Pack(x)),
 					async (xs, ctx) =>
@@ -373,7 +373,7 @@ namespace FoundationDB.Client.Tests
 				var rnd = new Random(2403);
 				var source = Enumerable.Range(1, N).Select((x) => new KeyValuePair<int, int>(x, rnd.Next(1000))).ToList();
 
-				await Fdb.Bulk.WriteAsync(
+				await FdbBulk.WriteAsync(
 					db,
 					source.Select((x) => new KeyValuePair<Slice, Slice>(location.Pack(x.Key), Slice.FromInt32(x.Value))),
 					null,
@@ -384,7 +384,7 @@ namespace FoundationDB.Client.Tests
 
 				int chunks = 0;
 				var sw = Stopwatch.StartNew();
-				long total = await Fdb.Bulk.AggregateAsync(
+				long total = await FdbBulk.AggregateAsync(
 					db,
 					source.Select(x => location.Pack(x.Key)),
 					() => 0L,
@@ -435,7 +435,7 @@ namespace FoundationDB.Client.Tests
 				var rnd = new Random(2403);
 				var source = Enumerable.Range(1, N).Select((x) => new KeyValuePair<int, int>(x, rnd.Next(1000))).ToList();
 
-				await Fdb.Bulk.WriteAsync(
+				await FdbBulk.WriteAsync(
 					db,
 					source.Select((x) => new KeyValuePair<Slice, Slice>(location.Pack(x.Key), Slice.FromInt32(x.Value))),
 					null,
@@ -446,7 +446,7 @@ namespace FoundationDB.Client.Tests
 
 				int chunks = 0;
 				var sw = Stopwatch.StartNew();
-				double average = await Fdb.Bulk.AggregateAsync(
+				double average = await FdbBulk.AggregateAsync(
 					db,
 					source.Select(x => location.Pack(x.Key)),
 					() => FdbTuple.Create(0L, 0L),

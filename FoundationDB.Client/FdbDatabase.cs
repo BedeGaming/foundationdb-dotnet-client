@@ -28,17 +28,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Async;
-	using FoundationDB.Client.Core;
-	using FoundationDB.Client.Native;
-	using FoundationDB.Client.Utils;
-	using FoundationDB.Layers.Directories;
-	using FoundationDB.Layers.Tuples;
 	using System;
 	using System.Collections.Concurrent;
 	using System.Diagnostics;
 	using System.Threading;
 	using System.Threading.Tasks;
+	using FoundationDB.Async;
+	using FoundationDB.Client.Core;
+	using FoundationDB.Client.Native;
+	using FoundationDB.Client.Utils;
+	using FoundationDB.Layers.Directories;
 
 	/// <summary>FoundationDB Database</summary>
 	[DebuggerDisplay("Name={m_name}, GlobalSpace={m_globalSpace}")]
@@ -146,7 +145,7 @@ namespace FoundationDB.Client
 			{
 				if (m_directory == null)
 				{
-					lock(this)//TODO: don't use this for locking
+					lock (this)//TODO: don't use this for locking
 					{
 						if (m_directory == null)
 						{
@@ -243,7 +242,7 @@ namespace FoundationDB.Client
 
 			if (!m_transactions.TryAdd(transaction.Id, transaction))
 			{
-				throw Fdb.Errors.FailedToRegisterTransactionOnDatabase(transaction, this);
+				throw FdbErrors.FailedToRegisterTransactionOnDatabase(transaction, this);
 			}
 		}
 
@@ -470,14 +469,14 @@ namespace FoundationDB.Client
 			// null or empty keys are not allowed
 			if (key.IsNull)
 			{
-				if (!ignoreError) error = Fdb.Errors.KeyCannotBeNull();
+				if (!ignoreError) error = FdbErrors.KeyCannotBeNull();
 				return false;
 			}
 
 			// key cannot be larger than maximum allowed key size
 			if (key.Count > Fdb.MaxKeySize)
 			{
-				if (!ignoreError) error = Fdb.Errors.KeyIsTooBig(key);
+				if (!ignoreError) error = FdbErrors.KeyIsTooBig(key);
 				return false;
 			}
 
@@ -496,7 +495,7 @@ namespace FoundationDB.Client
 				if (!endExclusive
 				 || !key.Equals(FdbKey.Increment(database.GlobalSpace.Key))) //TODO: cache this?
 				{
-					if (!ignoreError) error = Fdb.Errors.InvalidKeyOutsideDatabaseNamespace(database, key);
+					if (!ignoreError) error = FdbErrors.InvalidKeyOutsideDatabaseNamespace(database, key);
 					return false;
 				}
 			}
@@ -527,12 +526,12 @@ namespace FoundationDB.Client
 		{
 			if (value.IsNull)
 			{
-				return Fdb.Errors.ValueCannotBeNull(value);
+				return FdbErrors.ValueCannotBeNull(value);
 			}
 
 			if (value.Count > Fdb.MaxValueSize)
 			{
-				return Fdb.Errors.ValueIsTooBig(value);
+				return FdbErrors.ValueIsTooBig(value);
 			}
 
 			return null;

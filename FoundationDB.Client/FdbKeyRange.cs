@@ -28,9 +28,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Client.Utils;
 	using System;
 	using System.Diagnostics;
+	using FoundationDB.Client.Utils;
 
 	/// <summary>Represents a pair of keys defining the range 'Begin &lt;= key &gt; End'</summary>
 	[DebuggerDisplay("Begin={Begin}, End={End}")]
@@ -79,7 +79,7 @@ namespace FoundationDB.Client
 		/// <returns></returns>
 		public static FdbKeyRange StartsWith(Slice prefix)
 		{
-			if (prefix.IsNull) throw Fdb.Errors.KeyCannotBeNull("prefix");
+			if (prefix.IsNull) throw FdbErrors.KeyCannotBeNull("prefix");
 
 			// prefix => [ prefix, prefix + 1 )
 			return new FdbKeyRange(
@@ -100,7 +100,7 @@ namespace FoundationDB.Client
 		/// <returns>Range including all keys with the specified prefix.</returns>
 		public static FdbKeyRange PrefixedBy(Slice prefix)
 		{
-			if (prefix.IsNull) throw Fdb.Errors.KeyCannotBeNull("prefix");
+			if (prefix.IsNull) throw FdbErrors.KeyCannotBeNull("prefix");
 
 			// prefix => [ prefix."\0", prefix + 1)
 			return new FdbKeyRange(
@@ -121,7 +121,7 @@ namespace FoundationDB.Client
 		/// <returns>Range that only return the specified key.</returns>
 		public static FdbKeyRange FromKey(Slice key)
 		{
-			if (key.IsNull) throw Fdb.Errors.KeyCannotBeNull();
+			if (key.IsNull) throw FdbErrors.KeyCannotBeNull();
 
 			if (key.Count == 0)
 			{ // "" => [ "", "\x00" )
@@ -268,7 +268,7 @@ namespace FoundationDB.Client
 		{
 			return "{" + FdbKey.PrettyPrint(this.Begin, FdbKey.PrettyPrintMode.Begin) + ", " + FdbKey.PrettyPrint(this.End, FdbKey.PrettyPrintMode.End) + "}";
 		}
-	
+
 	}
 
 }
