@@ -30,10 +30,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Client.Native;
 	using System;
-	using System.Diagnostics;
 	using System.Threading;
+	using FoundationDB.Client.Native;
 
 	/// <summary>FDBFuture wrapper</summary>
 	/// <typeparam name="T">Type of result</typeparam>
@@ -167,7 +166,7 @@ namespace FoundationDB.Client
 		}
 
 		/// <summary>Update the Task with the state of a ready Future</summary>
-		/// <param name="future">Future that should be ready</param>
+		/// <param name="fromCallback">Future that should be ready</param>
 		/// <returns>True if we got a result, or false in case of error (or invalid state)</returns>
 		private void HandleCompletion(bool fromCallback)
 		{
