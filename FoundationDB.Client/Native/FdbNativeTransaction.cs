@@ -103,13 +103,13 @@ namespace FoundationDB.Client.Native
 			{
 				if (data.IsNull)
 				{
-					Fdb.DieOnError(FdbNative.TransactionSetOption(m_handle, option, null, 0));
+					Fdb.DieOnError(FdbNativeWin.TransactionSetOption(m_handle, option, null, 0));
 				}
 				else
 				{
 					fixed (byte* ptr = data.Array)
 					{
-						Fdb.DieOnError(FdbNative.TransactionSetOption(m_handle, option, ptr + data.Offset, data.Count));
+						Fdb.DieOnError(FdbNativeWin.TransactionSetOption(m_handle, option, ptr + data.Offset, data.Count));
 					}
 				}
 			}
@@ -121,12 +121,12 @@ namespace FoundationDB.Client.Native
 
 		public Task<long> GetReadVersionAsync(CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionGetReadVersion(m_handle);
+			var future = FdbNativeWin.TransactionGetReadVersion(m_handle);
 			return FdbFuture.CreateTaskFromHandle(future,
 				(h) =>
 				{
 					long version;
-					var err = FdbNative.FutureGetVersion(h, out version);
+					var err = FdbNativeWin.FutureGetVersion(h, out version);
 #if DEBUG_TRANSACTIONS
 					Debug.WriteLine("FdbTransaction[" + m_id + "].GetReadVersion() => err=" + err + ", version=" + version);
 #endif
@@ -139,7 +139,7 @@ namespace FoundationDB.Client.Native
 
 		public void SetReadVersion(long version)
 		{
-			FdbNative.TransactionSetReadVersion(m_handle, version);
+			FdbNativeWin.TransactionSetReadVersion(m_handle, version);
 		}
 
 		private static bool TryGetValueResult(FutureHandle h, out Slice result)
@@ -147,7 +147,7 @@ namespace FoundationDB.Client.Native
 			Contract.Requires(h != null);
 
 			bool present;
-			var err = FdbNative.FutureGetValue(h, out present, out result);
+			var err = FdbNativeWin.FutureGetValue(h, out present, out result);
 #if DEBUG_TRANSACTIONS
 			Debug.WriteLine("FdbTransaction[].TryGetValueResult() => err=" + err + ", present=" + present + ", valueLength=" + result.Count);
 #endif
@@ -169,7 +169,7 @@ namespace FoundationDB.Client.Native
 
 		public Task<Slice> GetAsync(Slice key, bool snapshot, CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionGet(m_handle, key, snapshot);
+			var future = FdbNativeWin.TransactionGet(m_handle, key, snapshot);
 			return FdbFuture.CreateTaskFromHandle(future, (h) => GetValueResultBytes(h), cancellationToken);
 		}
 
@@ -184,7 +184,7 @@ namespace FoundationDB.Client.Native
 			{
 				for (int i = 0; i < keys.Length; i++)
 				{
-					futures[i] = FdbNative.TransactionGet(m_handle, keys[i], snapshot);
+					futures[i] = FdbNativeWin.TransactionGet(m_handle, keys[i], snapshot);
 				}
 			}
 			catch
@@ -206,7 +206,7 @@ namespace FoundationDB.Client.Native
 		private static KeyValuePair<Slice, Slice>[] GetKeyValueArrayResult(FutureHandle h, out bool more)
 		{
 			KeyValuePair<Slice, Slice>[] result;
-			var err = FdbNative.FutureGetKeyValueArray(h, out result, out more);
+			var err = FdbNativeWin.FutureGetKeyValueArray(h, out result, out more);
 			Fdb.DieOnError(err);
 			return result;
 		}
@@ -218,7 +218,7 @@ namespace FoundationDB.Client.Native
 			Contract.Requires(options != null);
 
 			bool reversed = options.Reverse.Value;
-			var future = FdbNative.TransactionGetRange(m_handle, begin, end, options.Limit.Value, options.TargetBytes.Value, options.Mode.Value, iteration, snapshot, reversed);
+			var future = FdbNativeWin.TransactionGetRange(m_handle, begin, end, options.Limit.Value, options.TargetBytes.Value, options.Mode.Value, iteration, snapshot, reversed);
 			return FdbFuture.CreateTaskFromHandle(
 				future,
 				(h) =>
@@ -239,7 +239,7 @@ namespace FoundationDB.Client.Native
 			Contract.Requires(h != null);
 
 			Slice result;
-			var err = FdbNative.FutureGetKey(h, out result);
+			var err = FdbNativeWin.FutureGetKey(h, out result);
 #if DEBUG_TRANSACTIONS
 			Debug.WriteLine("FdbTransaction[].GetKeyResult() => err=" + err + ", result=" + result.ToString());
 #endif
@@ -249,7 +249,7 @@ namespace FoundationDB.Client.Native
 
 		public Task<Slice> GetKeyAsync(FdbKeySelector selector, bool snapshot, CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionGetKey(m_handle, selector, snapshot);
+			var future = FdbNativeWin.TransactionGetKey(m_handle, selector, snapshot);
 			return FdbFuture.CreateTaskFromHandle(
 				future,
 				(h) => GetKeyResult(h),
@@ -266,7 +266,7 @@ namespace FoundationDB.Client.Native
 			{
 				for (int i = 0; i < selectors.Length; i++)
 				{
-					futures[i] = FdbNative.TransactionGetKey(m_handle, selectors[i], snapshot);
+					futures[i] = FdbNativeWin.TransactionGetKey(m_handle, selectors[i], snapshot);
 				}
 			}
 			catch
@@ -288,7 +288,7 @@ namespace FoundationDB.Client.Native
 
 		public void Set(Slice key, Slice value)
 		{
-			FdbNative.TransactionSet(m_handle, key, value);
+			FdbNativeWin.TransactionSet(m_handle, key, value);
 
 			// There is a 28-byte overhead pet Set(..) in a transaction
 			// cf http://community.foundationdb.com/questions/547/transaction-size-limit
@@ -297,7 +297,7 @@ namespace FoundationDB.Client.Native
 
 		public void Atomic(Slice key, Slice param, FdbMutationType type)
 		{
-			FdbNative.TransactionAtomicOperation(m_handle, key, param, type);
+			FdbNativeWin.TransactionAtomicOperation(m_handle, key, param, type);
 
 			//TODO: what is the overhead for atomic operations?
 			Interlocked.Add(ref m_payloadBytes, key.Count + param.Count);
@@ -306,21 +306,21 @@ namespace FoundationDB.Client.Native
 
 		public void Clear(Slice key)
 		{
-			FdbNative.TransactionClear(m_handle, key);
+			FdbNativeWin.TransactionClear(m_handle, key);
 			// The key is converted to range [key, key.'\0'), and there is an overhead of 28-byte per operation
 			Interlocked.Add(ref m_payloadBytes, (key.Count * 2) + 28 + 1);
 		}
 
 		public void ClearRange(Slice beginKeyInclusive, Slice endKeyExclusive)
 		{
-			FdbNative.TransactionClearRange(m_handle, beginKeyInclusive, endKeyExclusive);
+			FdbNativeWin.TransactionClearRange(m_handle, beginKeyInclusive, endKeyExclusive);
 			// There is an overhead of 28-byte per operation
 			Interlocked.Add(ref m_payloadBytes, beginKeyInclusive.Count + endKeyExclusive.Count + 28);
 		}
 
 		public void AddConflictRange(Slice beginKeyInclusive, Slice endKeyExclusive, FdbConflictRangeType type)
 		{
-			FdbError err = FdbNative.TransactionAddConflictRange(m_handle, beginKeyInclusive, endKeyExclusive, type);
+			FdbError err = FdbNativeWin.TransactionAddConflictRange(m_handle, beginKeyInclusive, endKeyExclusive, type);
 			Fdb.DieOnError(err);
 		}
 
@@ -329,7 +329,7 @@ namespace FoundationDB.Client.Native
 			Contract.Requires(h != null);
 
 			string[] result;
-			var err = FdbNative.FutureGetStringArray(h, out result);
+			var err = FdbNativeWin.FutureGetStringArray(h, out result);
 #if DEBUG_TRANSACTIONS
 			Debug.WriteLine("FdbTransaction[].FutureGetStringArray() => err=" + err + ", results=" + (result == null ? "<null>" : result.Length.ToString()));
 #endif
@@ -339,7 +339,7 @@ namespace FoundationDB.Client.Native
 
 		public Task<string[]> GetAddressesForKeyAsync(Slice key, CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionGetAddressesForKey(m_handle, key);
+			var future = FdbNativeWin.TransactionGetAddressesForKey(m_handle, key);
 			return FdbFuture.CreateTaskFromHandle(
 				future,
 				(h) => GetStringArrayResult(h),
@@ -353,7 +353,7 @@ namespace FoundationDB.Client.Native
 
 		public FdbWatch Watch(Slice key, CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionWatch(m_handle, key);
+			var future = FdbNativeWin.TransactionWatch(m_handle, key);
 			return new FdbWatch(
 				FdbFuture.FromHandle<Slice>(future, (h) => key, cancellationToken),
 				key,
@@ -368,7 +368,7 @@ namespace FoundationDB.Client.Native
 		public long GetCommittedVersion()
 		{
 			long version;
-			var err = FdbNative.TransactionGetCommittedVersion(m_handle, out version);
+			var err = FdbNativeWin.TransactionGetCommittedVersion(m_handle, out version);
 #if DEBUG_TRANSACTIONS
 			Debug.WriteLine("FdbTransaction[" + m_id + "].GetCommittedVersion() => err=" + err + ", version=" + version);
 #endif
@@ -385,25 +385,25 @@ namespace FoundationDB.Client.Native
 		/// <remarks>As with other client/server databases, in some failure scenarios a client may be unable to determine whether a transaction succeeded. In these cases, CommitAsync() will throw CommitUnknownResult error. The OnErrorAsync() function treats this error as retryable, so retry loops that don’t check for CommitUnknownResult could execute the transaction twice. In these cases, you must consider the idempotence of the transaction.</remarks>
 		public Task CommitAsync(CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionCommit(m_handle);
+			var future = FdbNativeWin.TransactionCommit(m_handle);
 			return FdbFuture.CreateTaskFromHandle<object>(future, (h) => null, cancellationToken);
 		}
 
 		public Task OnErrorAsync(FdbError code, CancellationToken cancellationToken)
 		{
-			var future = FdbNative.TransactionOnError(m_handle, code);
+			var future = FdbNativeWin.TransactionOnError(m_handle, code);
 			return FdbFuture.CreateTaskFromHandle<object>(future, (h) => { ResetInternal(); return null; }, cancellationToken);
 		}
 
 		public void Reset()
 		{
-			FdbNative.TransactionReset(m_handle);
+			FdbNativeWin.TransactionReset(m_handle);
 			ResetInternal();
 		}
 
 		public void Cancel()
 		{
-			FdbNative.TransactionCancel(m_handle);
+			FdbNativeWin.TransactionCancel(m_handle);
 		}
 
 		private void ResetInternal()

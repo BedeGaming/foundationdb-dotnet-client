@@ -45,7 +45,7 @@ namespace FoundationDB.Client.Native
 
 		protected override void Destroy(IntPtr handle)
 		{
-			FdbNative.ClusterDestroy(handle);
+			FdbNativeWin.ClusterDestroy(handle);
 			Interlocked.Decrement(ref DebugCounters.ClusterHandles);
 		}
 

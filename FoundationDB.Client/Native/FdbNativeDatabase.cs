@@ -90,13 +90,13 @@ namespace FoundationDB.Client.Native
 			{
 				if (data.IsNull)
 				{
-					Fdb.DieOnError(FdbNative.DatabaseSetOption(m_handle, option, null, 0));
+					Fdb.DieOnError(FdbNativeWin.DatabaseSetOption(m_handle, option, null, 0));
 				}
 				else
 				{
 					fixed (byte* ptr = data.Array)
 					{
-						Fdb.DieOnError(FdbNative.DatabaseSetOption(m_handle, option, ptr + data.Offset, data.Count));
+						Fdb.DieOnError(FdbNativeWin.DatabaseSetOption(m_handle, option, ptr + data.Offset, data.Count));
 					}
 				}
 			}
@@ -107,7 +107,7 @@ namespace FoundationDB.Client.Native
 			TransactionHandle handle = null;
 			try
 			{
-				var err = FdbNative.DatabaseCreateTransaction(m_handle, out handle);
+				var err = FdbNativeWin.DatabaseCreateTransaction(m_handle, out handle);
 				if (Fdb.Failed(err))
 				{
 					throw Fdb.MapToException(err);

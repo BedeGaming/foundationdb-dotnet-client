@@ -28,18 +28,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client.Tests
 {
-	using FoundationDB.Layers.Directories;
-	using FoundationDB.Layers.Tuples;
-	using NUnit.Framework;
 	using System;
 	using System.Threading;
 	using System.Threading.Tasks;
+	using FoundationDB.Layers.Directories;
+	using FoundationDB.Layers.Tuples;
+	using NUnit.Framework;
 
 	internal static class TestHelpers
 	{
 		// change these to target a specific test cluster
 
-		public static readonly string TestClusterFile = null;
+		public static readonly string TestClusterFile = @"C:\Program Files\foundationdb\bin\fdb.cluster";
 		public static readonly string TestDbName = "DB";
 		public static readonly Slice TestGlobalPrefix = Slice.FromAscii("T");
 		public static readonly string[] TestPartition = new string[] { "Tests", Environment.MachineName };
@@ -110,7 +110,7 @@ namespace FoundationDB.Client.Tests
 						// not a tuple, dump as bytes
 						keyDump = "'" + key.ToString() + "'";
 					}
-						
+
 					Console.WriteLine("- " + keyDump + " = " + kvp.Value.ToString());
 				});
 

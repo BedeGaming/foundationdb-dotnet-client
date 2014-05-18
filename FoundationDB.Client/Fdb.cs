@@ -68,7 +68,7 @@ namespace FoundationDB.Client
 		private static bool s_started; //REVIEW: replace with state flags (Starting, Started, Failed, ...)
 
 		/// <summary>Currently selected API version</summary>
-		private static int s_apiVersion = FdbNative.FDB_API_VERSION;
+		private static int s_apiVersion = FdbNativeWin.FDB_API_VERSION;
 
 		/// <summary>Event handler called when the AppDomain gets unloaded</summary>
 		private static EventHandler s_appDomainUnloadHandler;
@@ -87,7 +87,7 @@ namespace FoundationDB.Client
 		/// <summary>Returns the maximum API version currently supported by this binding</summary>
 		public static int GetMaxApiVersion()
 		{
-			return FdbNative.GetMaxApiVersion();
+			return FdbNativeWin.GetMaxApiVersion();
 		}
 
 		/// <summary>Returns the currently selected API version</summary>
@@ -110,14 +110,14 @@ namespace FoundationDB.Client
 
 			if (value == 0)
 			{ // 0 means "use the default version"
-				s_apiVersion = FdbNative.FDB_API_VERSION;
+				s_apiVersion = FdbNativeWin.FDB_API_VERSION;
 			}
 			else
 			{
 				int min = GetMinApiVersion();
-				if (value < min) throw new ArgumentException(String.Format("The minimum API version supported by this binding is {0} and the default version is {1}.", min, FdbNative.FDB_API_VERSION));
+				if (value < min) throw new ArgumentException(String.Format("The minimum API version supported by this binding is {0} and the default version is {1}.", min, FdbNativeWin.FDB_API_VERSION));
 				int max = GetMaxApiVersion();
-				if (value > max) throw new ArgumentException(String.Format("The maximum API version supported by this binding is {0} and the default version is {1}.", max, FdbNative.FDB_API_VERSION));
+				if (value > max) throw new ArgumentException(String.Format("The maximum API version supported by this binding is {0} and the default version is {1}.", max, FdbNativeWin.FDB_API_VERSION));
 
 				s_apiVersion = value;
 			}
@@ -144,7 +144,7 @@ namespace FoundationDB.Client
 		/// <summary>Return the error message matching the specified error code</summary>
 		public static string GetErrorMessage(FdbError code)
 		{
-			return FdbNative.GetError(code);
+			return FdbNativeWin.GetError(code);
 		}
 
 		/// <summary>Maps an error code into an Exception (to be throwned)</summary>
@@ -220,7 +220,7 @@ namespace FoundationDB.Client
 
 				s_eventLoopStopRequested = true;
 
-				var err = FdbNative.StopNetwork();
+				var err = FdbNativeWin.StopNetwork();
 				if (err != FdbError.Success)
 				{
 					if (Logging.On) Logging.Warning(typeof(Fdb), "StopEventLoop", String.Format("Failed to stop event loop: {0}", err.ToString()));
@@ -290,7 +290,7 @@ namespace FoundationDB.Client
 
 				if (Logging.On) Logging.Verbose(typeof(Fdb), "EventLoop", String.Format("FDB Event Loop running on thread #{0}...", s_eventLoopThreadId.Value.ToString()));
 
-				var err = FdbNative.RunNetwork();
+				var err = FdbNativeWin.RunNetwork();
 				if (err != FdbError.Success)
 				{
 					if (s_eventLoopStopRequested || Environment.HasShutdownStarted)
@@ -515,11 +515,11 @@ namespace FoundationDB.Client
 			s_started = true;
 
 			int apiVersion = s_apiVersion;
-			if (apiVersion <= 0) apiVersion = FdbNative.FDB_API_VERSION;
+			if (apiVersion <= 0) apiVersion = FdbNativeWin.FDB_API_VERSION;
 
 			if (Logging.On) Logging.Info(typeof(Fdb), "Start", String.Format("Selecting fdb API version {0}", apiVersion));
 
-			FdbError err = FdbNative.SelectApiVersion(apiVersion);
+			FdbError err = FdbNativeWin.SelectApiVersion(apiVersion);
 			if (err != FdbError.Success)
 			{
 				if (Logging.On) Logging.Error(typeof(Fdb), "Start", String.Format("Failed to fdb API version {0}: {1}", apiVersion, err));
@@ -612,7 +612,7 @@ namespace FoundationDB.Client
 
 				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", "Setting up Network Thread...");
 
-				DieOnError(FdbNative.SetupNetwork());
+				DieOnError(FdbNativeWin.SetupNetwork());
 				s_started = true; //BUGBUG: already set at the start of the method. Maybe we need state flags ?
 			}
 
@@ -625,10 +625,10 @@ namespace FoundationDB.Client
 		{
 			unsafe
 			{
-				var data = FdbNative.ToNativeString(value, nullTerminated: false);
+				var data = FdbNativeWin.ToNativeString(value, nullTerminated: false);
 				fixed (byte* ptr = data.Array)
 				{
-					return FdbNative.NetworkSetOption(option, ptr + data.Offset, data.Count);
+					return FdbNativeWin.NetworkSetOption(option, ptr + data.Offset, data.Count);
 				}
 			}
 		}
@@ -640,7 +640,7 @@ namespace FoundationDB.Client
 			{
 				fixed (byte* ptr = value.Array)
 				{
-					return FdbNative.NetworkSetOption(option, ptr + value.Offset, value.Count);
+					return FdbNativeWin.NetworkSetOption(option, ptr + value.Offset, value.Count);
 				}
 			}
 		}

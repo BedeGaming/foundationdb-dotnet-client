@@ -187,7 +187,7 @@ namespace FoundationDB.Client
 
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "SetOption", String.Format("Setting transaction option {0} to '{1}'", option.ToString(), value ?? "<null>"));
 
-			var data = FdbNative.ToNativeString(value, nullTerminated: true);
+			var data = FdbNativeWin.ToNativeString(value, nullTerminated: true);
 			m_handler.SetOption(option, data);
 		}
 

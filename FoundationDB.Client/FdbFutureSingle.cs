@@ -69,7 +69,7 @@ namespace FoundationDB.Client
 					return;
 				}
 
-				if (FdbNative.FutureIsReady(handle))
+				if (FdbNativeWin.FutureIsReady(handle))
 				{ // either got a value or an error
 #if DEBUG_FUTURES
 					Debug.WriteLine("Future<" + typeof(T).Name + "> 0x" + handle.Handle.ToString("x") + " was already ready");
@@ -115,7 +115,7 @@ namespace FoundationDB.Client
 				var prm = RegisterCallback(this);
 
 				// register the callback handler
-				var err = FdbNative.FutureSetCallback(handle, CallbackHandler, prm);
+				var err = FdbNativeWin.FutureSetCallback(handle, CallbackHandler, prm);
 				if (Fdb.Failed(err))
 				{ // uhoh
 #if DEBUG_FUTURES
@@ -147,7 +147,7 @@ namespace FoundationDB.Client
 		#endregion
 
 		/// <summary>Cached delegate of the future completion callback handler</summary>
-		private static readonly FdbNative.FdbFutureCallback CallbackHandler = new FdbNative.FdbFutureCallback(FutureCompletionCallback);
+		private static readonly FdbNativeWin.FdbFutureCallback CallbackHandler = new FdbNativeWin.FdbFutureCallback(FutureCompletionCallback);
 
 		/// <summary>Handler called when a FDBFuture becomes ready</summary>
 		/// <param name="futureHandle">Handle on the future that became ready</param>
@@ -190,7 +190,7 @@ namespace FoundationDB.Client
 				{
 					UnregisterCancellationRegistration();
 
-					FdbError err = FdbNative.FutureGetError(handle);
+					FdbError err = FdbNativeWin.FutureGetError(handle);
 					if (Fdb.Failed(err))
 					{ // it failed...
 #if DEBUG_FUTURES
@@ -253,13 +253,13 @@ namespace FoundationDB.Client
 		protected override void CancelHandles()
 		{
 			var handle = m_handle;
-			if (handle != null && !handle.IsClosed) FdbNative.FutureCancel(handle);
+			if (handle != null && !handle.IsClosed) FdbNativeWin.FutureCancel(handle);
 		}
 
 		protected override void ReleaseMemory()
 		{
 			var handle = m_handle;
-			if (handle != null && !handle.IsClosed) FdbNative.FutureReleaseMemory(handle);
+			if (handle != null && !handle.IsClosed) FdbNativeWin.FutureReleaseMemory(handle);
 		}
 
 	}

@@ -39,12 +39,12 @@ using FoundationDB.Client.Utils;
 
 namespace FoundationDB.Client.Native
 {
-	internal static unsafe class FdbNative
+	internal static unsafe class FdbNativeWin
 	{
 		public const int FDB_API_VERSION = 200;
 
 		/// <summary>Name of the C API dll used for P/Invoking</summary>
-		private const string FDB_C_DLL = "/usr/lib64/libfdb_c.so";
+		private const string FDB_C_DLL = "fdb_c.dll";
 
 		/// <summary>Handle on the native FDB C API library</summary>
 		private static readonly UnmanagedLibrary FdbCLib;
@@ -224,7 +224,7 @@ namespace FoundationDB.Client.Native
 
 		}
 
-		static FdbNative()
+		static FdbNativeWin()
 		{
 			// Impact of NativeLibPath:
 			// - If null, don't preload the library, and let the CLR find the file using the default P/Invoke behavior

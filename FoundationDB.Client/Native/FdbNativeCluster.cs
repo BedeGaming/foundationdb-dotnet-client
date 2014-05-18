@@ -51,12 +51,12 @@ namespace FoundationDB.Client
 
 		public static Task<FdbCluster> CreateClusterAsync(string clusterFile, CancellationToken cancellationToken)
 		{
-			var future = FdbNative.CreateCluster(clusterFile);
+			var future = FdbNativeWin.CreateCluster(clusterFile);
 			return FdbFuture.CreateTaskFromHandle(future,
 				(h) =>
 				{
 					ClusterHandle cluster;
-					var err = FdbNative.FutureGetCluster(h, out cluster);
+					var err = FdbNativeWin.FutureGetCluster(h, out cluster);
 					if (err != FdbError.Success)
 					{
 						cluster.Dispose();
@@ -82,13 +82,13 @@ namespace FoundationDB.Client
 			{
 				if (data.IsNull)
 				{
-					Fdb.DieOnError(FdbNative.ClusterSetOption(m_handle, option, null, 0));
+					Fdb.DieOnError(FdbNativeWin.ClusterSetOption(m_handle, option, null, 0));
 				}
 				else
 				{
 					fixed (byte* ptr = data.Array)
 					{
-						Fdb.DieOnError(FdbNative.ClusterSetOption(m_handle, option, ptr + data.Offset, data.Count));
+						Fdb.DieOnError(FdbNativeWin.ClusterSetOption(m_handle, option, ptr + data.Offset, data.Count));
 					}
 				}
 			}
@@ -98,13 +98,13 @@ namespace FoundationDB.Client
 		{
 			if (cancellationToken.IsCancellationRequested) return TaskHelpers.FromCancellation<IFdbDatabaseHandler>(cancellationToken);
 
-			var future = FdbNative.ClusterCreateDatabase(m_handle, databaseName);
+			var future = FdbNativeWin.ClusterCreateDatabase(m_handle, databaseName);
 			return FdbFuture.CreateTaskFromHandle(
 				future,
 				(h) =>
 				{
 					DatabaseHandle database;
-					var err = FdbNative.FutureGetDatabase(h, out database);
+					var err = FdbNativeWin.FutureGetDatabase(h, out database);
 					if (err != FdbError.Success)
 					{
 						database.Dispose();

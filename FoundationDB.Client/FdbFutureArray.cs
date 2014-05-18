@@ -84,7 +84,7 @@ namespace FoundationDB.Client
 				foreach (var handle in handles)
 				{
 
-					if (FdbNative.FutureIsReady(handle))
+					if (FdbNativeWin.FutureIsReady(handle))
 					{ // this handle is already done
 						continue;
 					}
@@ -92,7 +92,7 @@ namespace FoundationDB.Client
 					Interlocked.Increment(ref m_pending);
 
 					// register the callback handler
-					var err = FdbNative.FutureSetCallback(handle, CallbackHandler, prm);
+					var err = FdbNativeWin.FutureSetCallback(handle, CallbackHandler, prm);
 					if (Fdb.Failed(err))
 					{ // uhoh
 						Debug.WriteLine("Failed to set callback for Future<" + typeof(T).Name + "> 0x" + handle.Handle.ToString("x") + " !!!");
@@ -163,7 +163,7 @@ namespace FoundationDB.Client
 				{
 					if (handle != null && !handle.IsClosed)
 					{
-						FdbNative.FutureReleaseMemory(handle);
+						FdbNativeWin.FutureReleaseMemory(handle);
 					}
 				}
 			}
@@ -191,14 +191,14 @@ namespace FoundationDB.Client
 				{
 					if (handle != null && !handle.IsClosed)
 					{
-						FdbNative.FutureCancel(handle);
+						FdbNativeWin.FutureCancel(handle);
 					}
 				}
 			}
 		}
 
 		/// <summary>Cached delegate of the future completion callback handler</summary>
-		private static readonly FdbNative.FdbFutureCallback CallbackHandler = new FdbNative.FdbFutureCallback(FutureCompletionCallback);
+		private static readonly FdbNativeWin.FdbFutureCallback CallbackHandler = new FdbNativeWin.FdbFutureCallback(FutureCompletionCallback);
 
 		/// <summary>Handler called when a FDBFuture becomes ready</summary>
 		/// <param name="futureHandle">Handle on the future that became ready</param>
@@ -260,7 +260,7 @@ namespace FoundationDB.Client
 
 					if (handle != null && !handle.IsClosed && !handle.IsInvalid)
 					{
-						FdbError err = FdbNative.FutureGetError(handle);
+						FdbError err = FdbNativeWin.FutureGetError(handle);
 						if (Fdb.Failed(err))
 						{ // it failed...
 							if (err != FdbError.OperationCancelled)
