@@ -9,7 +9,7 @@
 
 	using FoundationDB.Client.Utils;
 
-	internal static unsafe class FdbNativeMono
+	internal static unsafe class FdbNativeLinux
 	{
 		public const int FDB_API_VERSION = 200;
 
@@ -192,7 +192,7 @@
 			public static extern FdbError fdb_future_get_keyvalue_array(FutureHandle future, out FdbKeyValue* kv, out int count, out bool more);
 		}
 
-		static FdbNativeMono()
+		static FdbNativeLinux()
 		{
 			// Impact of NativeLibPath:
 			// - If null, don't preload the library, and let the CLR find the file using the default P/Invoke behavior

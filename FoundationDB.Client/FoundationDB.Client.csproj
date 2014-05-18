@@ -75,7 +75,7 @@
     <Compile Include="FdbDatabaseExtensions.cs" />
     <Compile Include="FdbKeyRangeComparer.cs" />
     <Compile Include="Core\IFdbTransactionHandler.cs" />
-    <Compile Include="Native\FdbNativeMono.cs" />
+    <Compile Include="Native\FdbNativeLinux.cs" />
     <Compile Include="Native\FdbNativeTransaction.cs" />
     <Compile Include="IFdbKey.cs" />
     <Compile Include="FdbTransactionMode.cs" />
