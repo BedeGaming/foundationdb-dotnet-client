@@ -202,7 +202,7 @@
     <Compile Include="Utils\Contract.cs" />
     <Compile Include="Native\FdbKeyValue.cs" />
     <Compile Include="Native\TransactionHandle.cs" />
-    <Compile Include="Native\FdbNative.cs" />
+    <Compile Include="Native\FdbNativeWin.cs" />
     <Compile Include="Native\ClusterHandle.cs" />
     <Compile Include="Native\DatabaseHandle.cs" />
     <Compile Include="Native\FutureHandle.cs" />

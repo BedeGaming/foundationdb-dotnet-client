@@ -683,7 +683,7 @@ namespace FoundationDB.Tests.Sandbox
 #if DEBUG
 				System.IO.File.WriteAllText(@"c:\temp\fdb\timings_" + N + "_" + K + "_" + B + ".csv", sb.ToString());
 #else
-                Console.WriteLine(sb.ToString());
+				Console.WriteLine(sb.ToString());
 #endif
 			}
 
