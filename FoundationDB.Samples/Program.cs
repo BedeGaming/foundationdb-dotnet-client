@@ -185,7 +185,7 @@ namespace FoundationDB.Samples
 				}
 				else
 				{
-					Db = Fdb.Directory.OpenNamedPartitionAsync(clusterFile, dbName, partition, false, go.Token).GetAwaiter().GetResult();
+					Db = FdbDirectory.OpenNamedPartitionAsync(clusterFile, dbName, partition, false, go.Token).GetAwaiter().GetResult();
 				}
 				using (Db)
 				{
@@ -194,7 +194,7 @@ namespace FoundationDB.Samples
 
 					Console.WriteLine("Using API v" + Fdb.ApiVersion + " (max " + Fdb.GetMaxApiVersion() + ")");
 					Console.WriteLine("Cluster file: " + (clusterFile ?? "<default>"));
-					var cf = Fdb.System.GetCoordinatorsAsync(Db, go.Token).GetAwaiter().GetResult();
+					var cf = FdbSystem.GetCoordinatorsAsync(Db, go.Token).GetAwaiter().GetResult();
 					Console.WriteLine("Connnected to: " + cf.Description + " (" + cf.Id + ")");
 					foreach (var coordinator in cf.Coordinators)
 					{
@@ -506,7 +506,7 @@ namespace FoundationDB.Samples
 				parent = db.Directory;
 			}
 
-			var folders = await Fdb.Directory.BrowseAsync(db, parent, ct);
+			var folders = await FdbDirectory.BrowseAsync(db, parent, ct);
 			if (folders != null && folders.Count > 0)
 			{
 				foreach (var kvp in folders)
@@ -517,7 +517,7 @@ namespace FoundationDB.Samples
 					{
 						if ((options & DirectoryBrowseOptions.ShowCount) != 0)
 						{
-							long count = await Fdb.System.EstimateCountAsync(db, kvp.Value.ToRange(), ct);
+							long count = await FdbSystem.EstimateCountAsync(db, kvp.Value.ToRange(), ct);
 							stream.WriteLine("  {0,-12} {1,-12} {3,9:N0} {2}", FdbKey.Dump(subfolder.Key), subfolder.Layer.IsNullOrEmpty ? "-" : ("<" + subfolder.Layer.ToUnicode() + ">"), name, count);
 						}
 						else
@@ -602,7 +602,7 @@ namespace FoundationDB.Samples
 				node = folder;
 			}
 
-			var children = await Fdb.Directory.BrowseAsync(db, node, ct);
+			var children = await FdbDirectory.BrowseAsync(db, node, ct);
 			int n = children.Count;
 			foreach(var child in children)
 			{

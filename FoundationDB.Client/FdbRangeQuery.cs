@@ -228,7 +228,7 @@ namespace FoundationDB.Client
 		}
 
 		/// <summary>Return the number of elements in the range, by reading them</summary>
-		/// <remarks>This method has to read all the keys and values, which may exceed the lifetime of a transaction. Please consider using <see cref="Fdb.System.EstimateCountAsync"/> when reading potentially large ranges.</remarks>
+		/// <remarks>This method has to read all the keys and values, which may exceed the lifetime of a transaction. Please consider using <see cref="FdbSystem.EstimateCountAsync"/> when reading potentially large ranges.</remarks>
 		public Task<int> CountAsync()
 		{
 			return FdbAsyncEnumerable.CountAsync(this, this.Transaction.Cancellation);

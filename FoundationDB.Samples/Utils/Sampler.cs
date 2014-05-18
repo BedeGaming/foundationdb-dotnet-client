@@ -47,7 +47,7 @@ namespace FoundationDB.Samples.Benchmarks
 			Console.WriteLine("# Detecting cluster topology...");
 			var servers = await db.QueryAsync(tr => tr
 				.WithAccessToSystemKeys()
-				.GetRange(FdbKeyRange.StartsWith(Fdb.System.ServerList))
+				.GetRange(FdbKeyRange.StartsWith(FdbSystem.ServerList))
 				.Select(kvp => new
 				{
 					Node = kvp.Value.Substring(8, 16).ToHexaString(),
@@ -64,7 +64,7 @@ namespace FoundationDB.Samples.Benchmarks
 			Console.WriteLine("# > Found " + numNodes + " process(es) on " + numMachines + " machine(s) in " + numDCs + " datacenter(s)");
 			Console.WriteLine("# Reading list of shards...");
 			// dump keyServers
-			var ranges = await Fdb.System.GetChunksAsync(db, FdbKey.MinValue, FdbKey.MaxValue, ct);
+			var ranges = await FdbSystem.GetChunksAsync(db, FdbKey.MinValue, FdbKey.MaxValue, ct);
 			Console.WriteLine("# > Found " + ranges.Count + " shards:");
 
 			// take a sample

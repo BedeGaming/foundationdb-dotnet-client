@@ -50,17 +50,17 @@ namespace FoundationDB.Client.Tests
 			Assert.That(FdbKey.System.GetBytes(), Is.EqualTo(new byte[] { 255 }));
 			Assert.That(FdbKey.Directory.GetBytes(), Is.EqualTo(new byte[] { 254 }));
 
-			Assert.That(Fdb.System.Coordinators.ToString(), Is.EqualTo("<FF>/coordinators"));
-			Assert.That(Fdb.System.KeyServers.ToString(), Is.EqualTo("<FF>/keyServers/"));
-			Assert.That(Fdb.System.MinValue.ToString(), Is.EqualTo("<FF><00>"));
-			Assert.That(Fdb.System.MaxValue.ToString(), Is.EqualTo("<FF><FF>"));
-			Assert.That(Fdb.System.ServerKeys.ToString(), Is.EqualTo("<FF>/serverKeys/"));
-			Assert.That(Fdb.System.ServerList.ToString(), Is.EqualTo("<FF>/serverList/"));
-			Assert.That(Fdb.System.BackupDataFormat, Is.EqualTo("<FF>/backupDataFormat/"));
-			Assert.That(Fdb.System.InitId.ToString(), Is.EqualTo("<FF>/init_id/"));
-			Assert.That(Fdb.System.ConfigKey("hello").ToString(), Is.EqualTo("<FF>/conf/hello"));
-			Assert.That(Fdb.System.GlobalsKey("world").ToString(), Is.EqualTo("<FF>/globals/world"));
-			Assert.That(Fdb.System.WorkersKey("foo", "bar").ToString(), Is.EqualTo("<FF>/workers/foo/bar"));
+			Assert.That(FdbSystem.Coordinators.ToString(), Is.EqualTo("<FF>/coordinators"));
+			Assert.That(FdbSystem.KeyServers.ToString(), Is.EqualTo("<FF>/keyServers/"));
+			Assert.That(FdbSystem.MinValue.ToString(), Is.EqualTo("<FF><00>"));
+			Assert.That(FdbSystem.MaxValue.ToString(), Is.EqualTo("<FF><FF>"));
+			Assert.That(FdbSystem.ServerKeys.ToString(), Is.EqualTo("<FF>/serverKeys/"));
+			Assert.That(FdbSystem.ServerList.ToString(), Is.EqualTo("<FF>/serverList/"));
+			Assert.That(FdbSystem.BackupDataFormat, Is.EqualTo("<FF>/backupDataFormat/"));
+			Assert.That(FdbSystem.InitId.ToString(), Is.EqualTo("<FF>/init_id/"));
+			Assert.That(FdbSystem.ConfigKey("hello").ToString(), Is.EqualTo("<FF>/conf/hello"));
+			Assert.That(FdbSystem.GlobalsKey("world").ToString(), Is.EqualTo("<FF>/globals/world"));
+			Assert.That(FdbSystem.WorkersKey("foo", "bar").ToString(), Is.EqualTo("<FF>/workers/foo/bar"));
 		}
 
 		[Test]

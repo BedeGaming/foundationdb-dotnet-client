@@ -178,14 +178,14 @@ namespace FoundationDB.Client.Tests
 				Assert.That(db.IsKeyValid(Slice.Empty), Is.True, "Empty key is allowed");
 				Assert.That(db.IsKeyValid(Slice.FromString("hello")), Is.True);
 				Assert.That(db.IsKeyValid(Slice.Create(Fdb.MaxKeySize + 1)), Is.False, "Key is too large");
-				Assert.That(db.IsKeyValid(Fdb.System.Coordinators), Is.True, "System keys are valid");
+				Assert.That(db.IsKeyValid(FdbSystem.Coordinators), Is.True, "System keys are valid");
 
 				// EnsureKeyIsValid
 				Assert.That(() => db.EnsureKeyIsValid(Slice.Nil), Throws.InstanceOf<ArgumentException>());
 				Assert.That(() => db.EnsureKeyIsValid(Slice.Empty), Throws.Nothing);
 				Assert.That(() => db.EnsureKeyIsValid(Slice.FromString("hello")), Throws.Nothing);
 				Assert.That(() => db.EnsureKeyIsValid(Slice.Create(Fdb.MaxKeySize + 1)), Throws.InstanceOf<ArgumentException>());
-				Assert.That(() => db.EnsureKeyIsValid(Fdb.System.Coordinators), Throws.Nothing);
+				Assert.That(() => db.EnsureKeyIsValid(FdbSystem.Coordinators), Throws.Nothing);
 			}
 		}
 
@@ -194,7 +194,7 @@ namespace FoundationDB.Client.Tests
 		{
 			using (var db = await OpenTestDatabaseAsync())
 			{
-				var coordinators = await Fdb.System.GetCoordinatorsAsync(db, this.Cancellation);
+				var coordinators = await FdbSystem.GetCoordinatorsAsync(db, this.Cancellation);
 				Assert.That(coordinators, Is.Not.Null);
 				Assert.That(coordinators.Description, Is.EqualTo("local"));
 				Assert.That(coordinators.Id, Is.Not.Null.And.Length.GreaterThan(0));
@@ -213,7 +213,7 @@ namespace FoundationDB.Client.Tests
 		{
 			using (var db = await OpenTestDatabaseAsync())
 			{
-				string mode = await Fdb.System.GetStorageEngineModeAsync(db, this.Cancellation);
+				string mode = await FdbSystem.GetStorageEngineModeAsync(db, this.Cancellation);
 				Console.WriteLine("Storage engine: " + mode);
 				Assert.That(mode, Is.Not.Null);
 				Assert.That(mode, Is.EqualTo("ssd").Or.EqualTo("memory"));

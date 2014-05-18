@@ -199,11 +199,11 @@
 			// - If String.Empty, call win32 LoadLibrary("fdb_c.dll") and let the os find the file (using the standard OS behavior)
 			// - Else, combine the path with "fdb_c.dll" and call LoadLibrary with the resulting (relative or absolute) path
 
-			if (Fdb.FdbOptions.NativeLibPath != null)
+			if (FdbOptions.NativeLibPath != null)
 			{
 				try
 				{
-					FdbCLib = UnmanagedLibrary.LoadLibrary(Path.Combine(Fdb.FdbOptions.NativeLibPath, FDB_C_DLL));
+					FdbCLib = UnmanagedLibrary.LoadLibrary(Path.Combine(FdbOptions.NativeLibPath, FDB_C_DLL));
 				}
 				catch (Exception e)
 				{

@@ -30,159 +30,153 @@ namespace FoundationDB.Client
 {
 	using System;
 
-	public static partial class Fdb
+	//REVIEW: consider changing this to an instance class so that we could do a Fluent API ? ex: Fdb.Options.WithFoo(...).WithBar(...).WithBaz(...)
+
+	/// <summary>Global settings for the FoundationDB binding</summary>
+	public static class FdbOptions
 	{
 
-		//REVIEW: consider changing this to an instance class so that we could do a Fluent API ? ex: Fdb.Options.WithFoo(...).WithBar(...).WithBaz(...)
+		#region Native Library Preloading...
 
-		/// <summary>Global settings for the FoundationDB binding</summary>
-		public static class FdbOptions
+		/// <summary>Custom path from where to load the native C API library. If null, let the CLR find the dll. If String.Empty let Win32's LoadLibrary find the correct dll, else use the specified path to load the library</summary>
+		public static string NativeLibPath = String.Empty;
+
+		/// <summary>Disable preloading of the native C API library. The CLR will handle the binding of the library.</summary>
+		/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void DisableNativeLibraryPreloading()
 		{
-
-			#region Native Library Preloading...
-
-			/// <summary>Custom path from where to load the native C API library. If null, let the CLR find the dll. If String.Empty let Win32's LoadLibrary find the correct dll, else use the specified path to load the library</summary>
-			public static string NativeLibPath = String.Empty;
-
-			/// <summary>Disable preloading of the native C API library. The CLR will handle the binding of the library.</summary>
-			/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void DisableNativeLibraryPreloading()
-			{
-				Fdb.FdbOptions.NativeLibPath = null;
-			}
-
-			/// <summary>Enable automatic preloading of the native C API library. The operating system will handle the binding of the library</summary>
-			/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void EnableNativeLibraryPreloading()
-			{
-				Fdb.FdbOptions.NativeLibPath = String.Empty;
-			}
-
-			/// <summary>Preload the native C API library from a specifc path (relative of absolute) where the fdb_c.dll library is located</summary>
-			/// <example>SetNativeLibPath(@".\libs\x64") will attempt to load ".\libs\x64\fdb_c.dll"</example>
-			/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetNativeLibPath(string path)
-			{
-				if (path == null) throw new ArgumentNullException("path");
-
-				Fdb.FdbOptions.NativeLibPath = path;
-			}
-
-			#endregion
-
-			#region Trace Path...
-
-			/// <summary>Default path to the network thread tracing file</summary>
-			public static string TracePath = null;
-
-			/// <summary>Sets the custom path where the logs will be stored</summary>
-			/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetTracePath(string outputDirectory)
-			{
-				Fdb.FdbOptions.TracePath = outputDirectory;
-			}
-
-			#endregion
-
-			#region TLS...
-
-			/// <summary>File path or linker-resolved name of the custom TLS plugin to load.</summary>
-			public static string TLSPlugin { get; private set; }
-
-			/// <summary>Content of the TLS root and client certificates used for TLS connections (none by default)</summary>
-			public static Slice TLSCertificateBytes { get; private set; }
-
-			/// <summary>Path to the TLS root and client certificates used for TLS connections (none by default)</summary>
-			public static string TLSCertificatePath { get; private set; }
-
-			/// <summary>Path to the Private Key used for TLS connections (none by default)</summary>
-			public static Slice TLSPrivateKeyBytes { get; private set; }
-
-			/// <summary>Path to the Private Key used for TLS connections (none by default)</summary>
-			public static string TLSPrivateKeyPath { get; private set; }
-
-			/// <summary>Pattern used to verifiy certificates of TLS peers (none by default)</summary>
-			public static Slice TLSVerificationPattern { get; private set; }
-
-			/// <summary>Set the file path or linker-resolved name of the custom TLS plugin to load. </summary>
-			public static void SetTLSPlugin(string name)
-			{
-				Fdb.FdbOptions.TLSPlugin = name;
-			}
-
-			/// <summary>Sets the path to the root certificate and public key for TLS connections</summary>
-			/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetTLSCertificate(Slice bytes)
-			{
-				Fdb.FdbOptions.TLSCertificateBytes = bytes;
-				Fdb.FdbOptions.TLSCertificatePath = null;
-			}
-
-			/// <summary>Sets the path to the root certificate and public key for TLS connections</summary>
-			/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetTLSCertificate(string path)
-			{
-				Fdb.FdbOptions.TLSCertificatePath = path;
-				Fdb.FdbOptions.TLSCertificateBytes = Slice.Nil;
-			}
-
-			/// <summary>Sets the path to the private key for TLS connections</summary>
-			/// <remarks>This must be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetTLSPrivateKey(Slice bytes)
-			{
-				Fdb.FdbOptions.TLSPrivateKeyBytes = bytes;
-				Fdb.FdbOptions.TLSPrivateKeyPath = null;
-			}
-
-			/// <summary>Sets the path to the private key for TLS connections</summary>
-			/// <remarks>This must be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetTLSPrivateKey(string path)
-			{
-				Fdb.FdbOptions.TLSPrivateKeyPath = path;
-				Fdb.FdbOptions.TLSPrivateKeyBytes = Slice.Nil;
-			}
-
-			/// <summary>Sets the pattern with wich to verify certificates of TLS peers</summary>
-			/// <remarks>This must be called before the start of the network thread, otherwise it won't have any effects.</remarks>
-			public static void SetTlsVerificationPattern(Slice pattern)
-			{
-				Fdb.FdbOptions.TLSVerificationPattern = pattern;
-			}
-
-			/// <summary>Use TLS to secure the connections to the cluster</summary>
-			/// <param name="certificateBytes">Content of the root certificate and public key</param>
-			/// <param name="privateKeyBytes">Content of the private key</param>
-			/// <param name="verificationPattern">Verification with which to verify certificates of TLS peers</param>
-			/// <param name="plugin">Optional file path or linker-resolved name of the custom TLS plugin to load</param>
-			public static void UseTLS(Slice certificateBytes, Slice privateKeyBytes, Slice verificationPattern = default(Slice), string plugin = null)
-			{
-				Fdb.FdbOptions.TLSPlugin = plugin;
-				Fdb.FdbOptions.TLSCertificateBytes = certificateBytes;
-				Fdb.FdbOptions.TLSCertificatePath = null;
-				Fdb.FdbOptions.TLSPrivateKeyBytes = privateKeyBytes;
-				Fdb.FdbOptions.TLSPrivateKeyPath = null;
-				Fdb.FdbOptions.TLSVerificationPattern = verificationPattern;
-			}
-
-			/// <summary>Use TLS to secure the connections to the cluster</summary>
-			/// <param name="certificatePath">Path to the root certificate and public key</param>
-			/// <param name="privateKeyPath">Path to the private key</param>
-			/// <param name="verificationPattern">Verification with which to verify certificates of TLS peers</param>
-			/// <param name="plugin">Optional file path or linker-resolved name of the custom TLS plugin to load</param>
-			public static void UseTLS(string certificatePath, string privateKeyPath, Slice verificationPattern = default(Slice), string plugin = null)
-			{
-				Fdb.FdbOptions.TLSPlugin = plugin;
-				Fdb.FdbOptions.TLSCertificatePath = certificatePath;
-				Fdb.FdbOptions.TLSCertificateBytes = Slice.Nil;
-				Fdb.FdbOptions.TLSPrivateKeyPath = privateKeyPath;
-				Fdb.FdbOptions.TLSPrivateKeyBytes = Slice.Nil;
-				Fdb.FdbOptions.TLSVerificationPattern = verificationPattern;
-			}
-
-			#endregion
-
+			FdbOptions.NativeLibPath = null;
 		}
 
-	}
+		/// <summary>Enable automatic preloading of the native C API library. The operating system will handle the binding of the library</summary>
+		/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void EnableNativeLibraryPreloading()
+		{
+			FdbOptions.NativeLibPath = String.Empty;
+		}
 
+		/// <summary>Preload the native C API library from a specifc path (relative of absolute) where the fdb_c.dll library is located</summary>
+		/// <example>SetNativeLibPath(@".\libs\x64") will attempt to load ".\libs\x64\fdb_c.dll"</example>
+		/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetNativeLibPath(string path)
+		{
+			if (path == null) throw new ArgumentNullException("path");
+
+			FdbOptions.NativeLibPath = path;
+		}
+
+		#endregion
+
+		#region Trace Path...
+
+		/// <summary>Default path to the network thread tracing file</summary>
+		public static string TracePath = null;
+
+		/// <summary>Sets the custom path where the logs will be stored</summary>
+		/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetTracePath(string outputDirectory)
+		{
+			FdbOptions.TracePath = outputDirectory;
+		}
+
+		#endregion
+
+		#region TLS...
+
+		/// <summary>File path or linker-resolved name of the custom TLS plugin to load.</summary>
+		public static string TLSPlugin { get; private set; }
+
+		/// <summary>Content of the TLS root and client certificates used for TLS connections (none by default)</summary>
+		public static Slice TLSCertificateBytes { get; private set; }
+
+		/// <summary>Path to the TLS root and client certificates used for TLS connections (none by default)</summary>
+		public static string TLSCertificatePath { get; private set; }
+
+		/// <summary>Path to the Private Key used for TLS connections (none by default)</summary>
+		public static Slice TLSPrivateKeyBytes { get; private set; }
+
+		/// <summary>Path to the Private Key used for TLS connections (none by default)</summary>
+		public static string TLSPrivateKeyPath { get; private set; }
+
+		/// <summary>Pattern used to verifiy certificates of TLS peers (none by default)</summary>
+		public static Slice TLSVerificationPattern { get; private set; }
+
+		/// <summary>Set the file path or linker-resolved name of the custom TLS plugin to load. </summary>
+		public static void SetTLSPlugin(string name)
+		{
+			FdbOptions.TLSPlugin = name;
+		}
+
+		/// <summary>Sets the path to the root certificate and public key for TLS connections</summary>
+		/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetTLSCertificate(Slice bytes)
+		{
+			FdbOptions.TLSCertificateBytes = bytes;
+			FdbOptions.TLSCertificatePath = null;
+		}
+
+		/// <summary>Sets the path to the root certificate and public key for TLS connections</summary>
+		/// <remarks>This *must* be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetTLSCertificate(string path)
+		{
+			FdbOptions.TLSCertificatePath = path;
+			FdbOptions.TLSCertificateBytes = Slice.Nil;
+		}
+
+		/// <summary>Sets the path to the private key for TLS connections</summary>
+		/// <remarks>This must be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetTLSPrivateKey(Slice bytes)
+		{
+			FdbOptions.TLSPrivateKeyBytes = bytes;
+			FdbOptions.TLSPrivateKeyPath = null;
+		}
+
+		/// <summary>Sets the path to the private key for TLS connections</summary>
+		/// <remarks>This must be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetTLSPrivateKey(string path)
+		{
+			FdbOptions.TLSPrivateKeyPath = path;
+			FdbOptions.TLSPrivateKeyBytes = Slice.Nil;
+		}
+
+		/// <summary>Sets the pattern with wich to verify certificates of TLS peers</summary>
+		/// <remarks>This must be called before the start of the network thread, otherwise it won't have any effects.</remarks>
+		public static void SetTlsVerificationPattern(Slice pattern)
+		{
+			FdbOptions.TLSVerificationPattern = pattern;
+		}
+
+		/// <summary>Use TLS to secure the connections to the cluster</summary>
+		/// <param name="certificateBytes">Content of the root certificate and public key</param>
+		/// <param name="privateKeyBytes">Content of the private key</param>
+		/// <param name="verificationPattern">Verification with which to verify certificates of TLS peers</param>
+		/// <param name="plugin">Optional file path or linker-resolved name of the custom TLS plugin to load</param>
+		public static void UseTLS(Slice certificateBytes, Slice privateKeyBytes, Slice verificationPattern = default(Slice), string plugin = null)
+		{
+			FdbOptions.TLSPlugin = plugin;
+			FdbOptions.TLSCertificateBytes = certificateBytes;
+			FdbOptions.TLSCertificatePath = null;
+			FdbOptions.TLSPrivateKeyBytes = privateKeyBytes;
+			FdbOptions.TLSPrivateKeyPath = null;
+			FdbOptions.TLSVerificationPattern = verificationPattern;
+		}
+
+		/// <summary>Use TLS to secure the connections to the cluster</summary>
+		/// <param name="certificatePath">Path to the root certificate and public key</param>
+		/// <param name="privateKeyPath">Path to the private key</param>
+		/// <param name="verificationPattern">Verification with which to verify certificates of TLS peers</param>
+		/// <param name="plugin">Optional file path or linker-resolved name of the custom TLS plugin to load</param>
+		public static void UseTLS(string certificatePath, string privateKeyPath, Slice verificationPattern = default(Slice), string plugin = null)
+		{
+			FdbOptions.TLSPlugin = plugin;
+			FdbOptions.TLSCertificatePath = certificatePath;
+			FdbOptions.TLSCertificateBytes = Slice.Nil;
+			FdbOptions.TLSPrivateKeyPath = privateKeyPath;
+			FdbOptions.TLSPrivateKeyBytes = Slice.Nil;
+			FdbOptions.TLSVerificationPattern = verificationPattern;
+		}
+
+		#endregion
+
+	}
 }
