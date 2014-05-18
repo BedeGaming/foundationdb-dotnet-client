@@ -130,7 +130,8 @@
     <Compile Include="Layers\Tuples\FdbTupleEncoder`1.cs" />
     <Compile Include="Layers\Tuples\FdbTuple`4.cs" />
     <Compile Include="Native\NativeLinuxLoader.cs" />
-    <Compile Include="Native\SafeLibraryHandle.cs" />
+    <Compile Include="Native\SafeLinuxLibraryHandle.cs" />
+    <Compile Include="Native\SafeWinLibraryHandle.cs" />
     <Compile Include="Native\NativeWinLoader.cs" />
     <Compile Include="Subspaces\Fdb.Directory.cs" />
     <Compile Include="Subspaces\FdbDatabasePartition.cs" />

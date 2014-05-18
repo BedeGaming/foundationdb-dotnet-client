@@ -6,7 +6,7 @@
 	internal static class NativeLinuxLoader
 	{
 		private const int RTLD_NOW = 2;
-		public static SafeLibraryHandle LoadLibrary(string fileName)
+		public static SafeLinuxLibraryHandle LoadLibrary(string fileName)
 		{
 			return dlopen(fileName, RTLD_NOW);
 		}
@@ -30,7 +30,7 @@
 		}
 
 		[DllImport("libdl.so")]
-		private static extern SafeLibraryHandle dlopen(string fileName, int flags);
+		private static extern SafeLinuxLibraryHandle dlopen(string fileName, int flags);
 
 		[DllImport("libdl.so")]
 		private static extern void dlclose(IntPtr handle);

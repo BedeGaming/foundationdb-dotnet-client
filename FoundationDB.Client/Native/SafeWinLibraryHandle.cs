@@ -6,9 +6,9 @@
 
 	// See http://msdn.microsoft.com/msdnmag/issues/05/10/Reliability/ for more about safe handles.
 	[SuppressUnmanagedCodeSecurity]
-	public sealed class SafeLibraryHandle : SafeHandleZeroOrMinusOneIsInvalid
+	public sealed class SafeWinLibraryHandle : SafeHandleZeroOrMinusOneIsInvalid
 	{
-		private SafeLibraryHandle() : base(true) { }
+		private SafeWinLibraryHandle() : base(true) { }
 
 		protected override bool ReleaseHandle()
 		{

@@ -31,6 +31,7 @@ using System.Runtime.InteropServices;
 
 namespace FoundationDB.Client.Native
 {
+	using Microsoft.Win32.SafeHandles;
 
 	/// <summary>Native Library Loader</summary>
 	internal sealed class UnmanagedLibrary : IDisposable
@@ -41,13 +42,15 @@ namespace FoundationDB.Client.Native
 			return (p == 4) || (p == 6) || (p == 128);
 		}
 
+		private Func<string, IntPtr> nativeMethodLoader;
+
 		/// <summary>Load a native library into the current process</summary>
 		/// <param name="path">Path to the native dll.</param>
 		/// <remarks>Throws exceptions on failure. Most common failure would be file-not-found, or that the file is not a  loadable image.</remarks>
 		/// <exception cref="System.IO.FileNotFoundException">if fileName can't be found</exception>
 		public static UnmanagedLibrary LoadLibrary(string path)
 		{
-			var handle = IsLinux() ? NativeLinuxLoader.LoadLibrary(path) : NativeWinLoader.LoadLibrary(path);
+			var handle = IsLinux() ? (SafeHandleZeroOrMinusOneIsInvalid)NativeLinuxLoader.LoadLibrary(path) : NativeWinLoader.LoadLibrary(path);
 			if (handle == null || handle.IsInvalid)
 			{
 				int hr = Marshal.GetHRForLastWin32Error();
@@ -57,23 +60,27 @@ namespace FoundationDB.Client.Native
 				else
 					throw ex;
 			}
-			return new UnmanagedLibrary(handle, path);
+			var loader = IsLinux()
+							 ? new Func<string, IntPtr>(methodName => NativeLinuxLoader.GetProcAddress(handle.DangerousGetHandle(), methodName))
+							 : (methodName) => NativeWinLoader.GetProcAddress((SafeWinLibraryHandle)handle, methodName);
+			return new UnmanagedLibrary(handle, path, loader);
 		}
 
 		/// <summary>Constructor to load a dll and be responible for freeing it.</summary>
 		/// <param name="handle">Handle to the loaded library</param>
 		/// <param name="path">Full path of library to load</param>
-		private UnmanagedLibrary(SafeLibraryHandle handle, string path)
+		private UnmanagedLibrary(SafeHandleZeroOrMinusOneIsInvalid handle, string path, Func<string, IntPtr> nativeMethodLoader)
 		{
 			this.Handle = handle;
 			this.Path = path;
+			this.nativeMethodLoader = nativeMethodLoader;
 		}
 
 		/// <summary>Path of the native library, as passed to LoadLibrary</summary>
 		public string Path { get; private set; }
 
 		/// <summary>Unmanaged resource. CLR will ensure SafeHandles get freed, without requiring a finalizer on this class.</summary>
-		public SafeLibraryHandle Handle { get; private set; }
+		public SafeHandleZeroOrMinusOneIsInvalid Handle { get; private set; }
 
 		/// <summary>
 		/// Dynamically lookup a function in the dll via kernel32!GetProcAddress.
@@ -89,7 +96,7 @@ namespace FoundationDB.Client.Native
 		/// the library and then the CLR may call release on that IUnknown and it will crash.</remarks>
 		public TDelegate GetUnmanagedFunction<TDelegate>(string functionName) where TDelegate : class
 		{
-			IntPtr p = NativeWinLoader.GetProcAddress(this.Handle, functionName);
+			IntPtr p = this.nativeMethodLoader(functionName);
 
 			// Failure is a common case, especially for adaptive code.
 			if (p == IntPtr.Zero)
