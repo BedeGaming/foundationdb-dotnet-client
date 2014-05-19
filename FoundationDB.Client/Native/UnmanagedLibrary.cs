@@ -69,6 +69,7 @@ namespace FoundationDB.Client.Native
 		/// <summary>Constructor to load a dll and be responible for freeing it.</summary>
 		/// <param name="handle">Handle to the loaded library</param>
 		/// <param name="path">Full path of library to load</param>
+		/// <param name="nativeMethodLoader">The delegate to the native method resoponsible for resolving function call addresses</param>
 		private UnmanagedLibrary(SafeHandleZeroOrMinusOneIsInvalid handle, string path, Func<string, IntPtr> nativeMethodLoader)
 		{
 			this.Handle = handle;

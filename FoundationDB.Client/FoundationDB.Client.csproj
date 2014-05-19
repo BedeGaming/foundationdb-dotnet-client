@@ -95,10 +95,10 @@
     <Compile Include="FdbFuture.cs" />
     <Compile Include="FdbFutureArray.cs" />
     <Compile Include="FdbWatch.cs" />
-    <Compile Include="Fdb.System.cs" />
+    <Compile Include="FdbSystem.cs" />
     <Compile Include="FdbConflictRangeType.cs" />
     <Compile Include="FdbMutationType.cs" />
-    <Compile Include="Fdb.Bulk.cs" />
+    <Compile Include="FdbBulk.cs" />
     <Compile Include="FdbTransaction.Snapshot.cs" />
     <Compile Include="IFdbTransaction.cs" />
     <Compile Include="IFdbReadOnlyTransaction.cs" />
@@ -112,8 +112,8 @@
     <Compile Include="FdbIntersectIterator.cs" />
     <Compile Include="FdbKeySelectorPair.cs" />
     <Compile Include="FdbMergeSortIterator.cs" />
-    <Compile Include="Fdb.Errors.cs" />
-    <Compile Include="Fdb.Options.cs" />
+    <Compile Include="FdbErrors.cs" />
+    <Compile Include="FdbOptions.cs" />
     <Compile Include="FdbRangeQuery.ResultIterator.cs" />
     <Compile Include="FdbRangeQuery.PagingIterator.cs" />
     <Compile Include="FdbException.cs" />

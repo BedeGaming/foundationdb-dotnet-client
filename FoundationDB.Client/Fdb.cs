@@ -40,9 +40,8 @@ namespace FoundationDB.Client
 	using SystemIO = System.IO;
 
 	/// <summary>FoundationDB binding</summary>
-	public static partial class Fdb
+	public static class Fdb
 	{
-
 		#region Constants...
 
 		/// <summary>Keys cannot exceed 10,000 bytes</summary>
