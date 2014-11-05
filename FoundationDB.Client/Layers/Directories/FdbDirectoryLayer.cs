@@ -48,10 +48,10 @@ namespace FoundationDB.Layers.Directories
 	public class FdbDirectoryLayer : IFdbDirectory
 	{
 		private const int SUBDIRS = 0;
-		private static readonly Version VERSION = new Version(1, 0, 0);
-		private static readonly Slice LayerSuffix = Slice.FromAscii("layer");
-		private static readonly Slice HcaKey = Slice.FromAscii("hca");
-		private static readonly Slice VersionKey = Slice.FromAscii("version");
+		internal static readonly Version LayerVersion = new Version(1, 0, 0);
+		internal static readonly Slice LayerSuffix = Slice.FromAscii("layer");
+		internal static readonly Slice HcaKey = Slice.FromAscii("hca");
+		internal static readonly Slice VersionKey = Slice.FromAscii("version");
 
 		/// <summary>Subspace where the content of each folder will be stored</summary>
 		public FdbSubspace ContentSubspace { get; private set; }
@@ -91,6 +91,19 @@ namespace FoundationDB.Layers.Directories
 			// If the DL is the root, the path is already absolute
 			// If the DL is used by a partition, then the path of the partition will be prepended to the path
 			return path == null ? this.Location : this.Location.Concat(path);
+		}
+
+		void IFdbDirectory.CheckLayer(Slice layer)
+		{
+			if (layer.IsPresent)
+			{
+				throw new InvalidOperationException(String.Format("The directory layer {0} is not compatible with layer {1}.", String.Join("/", this.Path), layer.ToAsciiOrHexaString()));
+			}
+		}
+
+		Task<FdbDirectorySubspace> IFdbDirectory.ChangeLayerAsync(IFdbTransaction trans, Slice newLayer)
+		{
+			throw new NotSupportedException("You cannot change the layer of an FdbDirectoryLayer.");
 		}
 
 		#region Constructors...
@@ -452,7 +465,7 @@ namespace FoundationDB.Layers.Directories
 			public readonly FdbSubspace Subspace;
 			public readonly IFdbTuple Path;
 			public readonly IFdbTuple TargetPath;
-			public readonly Slice Layer;
+			public Slice Layer; //PERF: readonly struct
 
 			public bool Exists { get { return this.Subspace != null; } }
 
@@ -460,7 +473,7 @@ namespace FoundationDB.Layers.Directories
 
 			public bool IsInPartition(bool includeEmptySubPath)
 			{
-				return this.Exists && this.Layer == FdbDirectoryPartition.PartitionLayerId && (includeEmptySubPath || this.TargetPath.Count > this.Path.Count);
+				return this.Exists && this.Layer == FdbDirectoryPartition.LayerId && (includeEmptySubPath || this.TargetPath.Count > this.Path.Count);
 			}
 
 		}
@@ -476,9 +489,9 @@ namespace FoundationDB.Layers.Directories
 			if (path == null) return FdbTuple.Empty;
 
 			var pathCopy = path.ToArray();
-			for (int i = 0; i < pathCopy.Length; i++)
+			foreach (var s in pathCopy)
 			{
-				if (pathCopy[i] == null)
+				if (s == null)
 				{
 					throw new ArgumentException("The path of a directory cannot contain null elements", argName ?? "path");
 				}
@@ -814,17 +827,17 @@ namespace FoundationDB.Layers.Directories
 			var minor = reader.ReadFixed32();
 			var upgrade = reader.ReadFixed32();
 
-			if (major > VERSION.Major) throw new InvalidOperationException(String.Format("Cannot load directory with version {0}.{1}.{2} using directory layer {3}", major, minor, upgrade, VERSION));
-			if (writeAccess && minor > VERSION.Minor) throw new InvalidOperationException(String.Format("Directory with version {0}.{1}.{2} is read-only when opened using directory layer {3}", major, minor, upgrade, VERSION));
+			if (major > LayerVersion.Major) throw new InvalidOperationException(String.Format("Cannot load directory with version {0}.{1}.{2} using directory layer {3}", major, minor, upgrade, LayerVersion));
+			if (writeAccess && minor > LayerVersion.Minor) throw new InvalidOperationException(String.Format("Directory with version {0}.{1}.{2} is read-only when opened using directory layer {3}", major, minor, upgrade, LayerVersion));
 		}
 
 		private void InitializeDirectory(IFdbTransaction trans)
 		{
 			// Set the version key
 			var writer = new SliceWriter(3 * 4);
-			writer.WriteFixed32((uint)VERSION.Major);
-			writer.WriteFixed32((uint)VERSION.Minor);
-			writer.WriteFixed32((uint)VERSION.Build);
+			writer.WriteFixed32((uint)LayerVersion.Major);
+			writer.WriteFixed32((uint)LayerVersion.Minor);
+			writer.WriteFixed32((uint)LayerVersion.Build);
 			trans.Set(this.RootNode.Pack(VersionKey), writer.ToSlice());
 		}
 
@@ -873,7 +886,7 @@ namespace FoundationDB.Layers.Directories
 
 			var path = this.Location.Concat(relativePath);
 			var prefix = this.NodeSubspace.UnpackSingle<Slice>(node.Key);
-			if (layer == FdbDirectoryPartition.PartitionLayerId)
+			if (layer == FdbDirectoryPartition.LayerId)
 			{
 				return new FdbDirectoryPartition(path, relativePath, prefix, this);
 			}
@@ -885,7 +898,7 @@ namespace FoundationDB.Layers.Directories
 
 		private FdbDirectoryPartition GetPartitionForNode(Node node)
 		{
-			Contract.Requires(node.Subspace != null && node.Path != null && FdbDirectoryPartition.PartitionLayerId.Equals(node.Layer));
+			Contract.Requires(node.Subspace != null && node.Path != null && FdbDirectoryPartition.LayerId.Equals(node.Layer));
 			return (FdbDirectoryPartition) ContentsOfNode(node.Subspace, node.Path, node.Layer);
 		}
 
@@ -909,9 +922,9 @@ namespace FoundationDB.Layers.Directories
 				}
 
 				layer = await tr.GetAsync(n.Pack(LayerSuffix)).ConfigureAwait(false);
-				if (layer == FdbDirectoryPartition.PartitionLayerId)
+				if (layer == FdbDirectoryPartition.LayerId)
 				{ // stop when reaching a partition
-					return new Node(n, path.Substring(0, i + 1), path, FdbDirectoryPartition.PartitionLayerId);
+					return new Node(n, path.Substring(0, i + 1), path, FdbDirectoryPartition.LayerId);
 				}
 
 				++i;

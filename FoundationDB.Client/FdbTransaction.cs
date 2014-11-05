@@ -42,7 +42,8 @@ namespace FoundationDB.Client
 	using System.Threading;
 	using System.Threading.Tasks;
 
-	/// <summary>FoundationDB transaction</summary>
+	/// <summary>FounrationDB transaction handle.</summary>
+	/// <remarks>An instance of this class can be used to read from and/or write to a snapshot of a FoundationDB database.</remarks>
 	[DebuggerDisplay("Id={Id}, StillAlive={StillAlive}")]
 	public sealed partial class FdbTransaction : IFdbTransaction, IFdbReadOnlyTransaction, IDisposable
 	{
@@ -83,7 +84,7 @@ namespace FoundationDB.Client
 		private readonly CancellationTokenSource m_cts;
 
 		/// <summary>CancellationToken that should be used for all async operations executing inside this transaction</summary>
-		private readonly CancellationToken m_cancellation;
+		private CancellationToken m_cancellation; //PERF: readonly struct
 
 		#endregion
 
@@ -148,6 +149,12 @@ namespace FoundationDB.Client
 
 		/// <summary>Returns true if this transaction only supports read operations, or false if it supports both read and write operations</summary>
 		public bool IsReadOnly { get { return m_readOnly; } }
+
+		/// <summary>Returns the isolation level of this transaction.</summary>
+		public FdbIsolationLevel IsolationLevel
+		{
+			get { return m_handler.IsolationLevel; }
+		}
 
 		#endregion
 
@@ -271,7 +278,7 @@ namespace FoundationDB.Client
 		{
 			EnsureCanRead();
 
-			m_database.EnsureKeyIsValid(key);
+			m_database.EnsureKeyIsValid(ref key);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "GetAsync", String.Format("Getting value for '{0}'", key.ToString()));
@@ -428,8 +435,8 @@ namespace FoundationDB.Client
 		{
 			EnsureCanWrite();
 
-			m_database.EnsureKeyIsValid(key);
-			m_database.EnsureValueIsValid(value);
+			m_database.EnsureKeyIsValid(ref key);
+			m_database.EnsureValueIsValid(ref value);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "Set", String.Format("Setting '{0}' = {1}", FdbKey.Dump(key), Slice.Dump(value)));
@@ -452,8 +459,8 @@ namespace FoundationDB.Client
 		{
 			EnsureCanWrite();
 
-			m_database.EnsureKeyIsValid(key);
-			m_database.EnsureValueIsValid(param);
+			m_database.EnsureKeyIsValid(ref key);
+			m_database.EnsureValueIsValid(ref param);
 
 			//The C API does not fail immediately if the mutation type is not valid, and only fails at commit time.
 			if (mutation != FdbMutationType.Add && mutation != FdbMutationType.BitAnd && mutation != FdbMutationType.BitOr && mutation != FdbMutationType.BitXor)
@@ -478,7 +485,7 @@ namespace FoundationDB.Client
 		{
 			EnsureCanWrite();
 
-			m_database.EnsureKeyIsValid(key);
+			m_database.EnsureKeyIsValid(ref key);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "Clear", String.Format("Clearing '{0}'", FdbKey.Dump(key)));
@@ -501,8 +508,8 @@ namespace FoundationDB.Client
 		{
 			EnsureCanWrite();
 
-			m_database.EnsureKeyIsValid(beginKeyInclusive);
-			m_database.EnsureKeyIsValid(endKeyExclusive, endExclusive: true);
+			m_database.EnsureKeyIsValid(ref beginKeyInclusive);
+			m_database.EnsureKeyIsValid(ref endKeyExclusive, endExclusive: true);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "ClearRange", String.Format("Clearing Range '{0}' <= k < '{1}'", beginKeyInclusive.ToString(), endKeyExclusive.ToString()));
@@ -525,8 +532,8 @@ namespace FoundationDB.Client
 		{
 			EnsureCanWrite();
 
-			m_database.EnsureKeyIsValid(beginKeyInclusive);
-			m_database.EnsureKeyIsValid(endKeyExclusive, endExclusive: true);
+			m_database.EnsureKeyIsValid(ref beginKeyInclusive);
+			m_database.EnsureKeyIsValid(ref endKeyExclusive, endExclusive: true);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "AddConflictRange", String.Format("Adding {2} conflict range '{0}' <= k < '{1}'", beginKeyInclusive.ToString(), endKeyExclusive.ToString(), type.ToString()));
@@ -548,7 +555,7 @@ namespace FoundationDB.Client
 		{
 			EnsureCanRead();
 
-			m_database.EnsureKeyIsValid(key);
+			m_database.EnsureKeyIsValid(ref key);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "GetAddressesForKeyAsync", String.Format("Getting addresses for key '{0}'", FdbKey.Dump(key)));
@@ -610,7 +617,7 @@ namespace FoundationDB.Client
 			cancellationToken.ThrowIfCancellationRequested();
 			EnsureCanRead();
 
-			m_database.EnsureKeyIsValid(key);
+			m_database.EnsureKeyIsValid(ref key);
 
 			// keep a copy of the key
 			// > don't keep a reference on a potentially large buffer while the watch is active, preventing it from being garbage collected
@@ -729,14 +736,14 @@ namespace FoundationDB.Client
 			}
 		}
 
-		/// <summary>Throws if the transaction is not a valid state (for reading/writing) and that we can proceed with a read operation</summary>
+		/// <summary>Throws if the transaction is not in a valid state (for reading/writing) and that we can proceed with a read operation</summary>
 		public void EnsureCanRead()
 		{
 			// note: read operations are async, so they can NOT be called from the network without deadlocking the system !
 			EnsureStilValid(allowFromNetworkThread: false, allowFailedState: false);
 		}
 
-		/// <summary>Throws if the transaction is not a valid state (for writing) and that we can proceed with a write operation</summary>
+		/// <summary>Throws if the transaction is not in a valid state (for writing) and that we can proceed with a write operation</summary>
 		public void EnsureCanWrite()
 		{
 			if (m_readOnly) ThrowReadOnlyTransaction(this);
@@ -750,7 +757,7 @@ namespace FoundationDB.Client
 			EnsureStilValid(allowFromNetworkThread: false, allowFailedState: true);
 		}
 
-		/// <summary>Throws if the transaction is not a valid state (for reading/writing) and that we can proceed with a read or write operation</summary>
+		/// <summary>Throws if the transaction is not in a valid state (for reading/writing) and that we can proceed with a read or write operation</summary>
 		/// <param name="allowFromNetworkThread">If true, this operation is allowed to run from a callback on the network thread and should NEVER block.</param>
 		/// <param name="allowFailedState">If true, this operation can run even if the transaction is in a failed state.</param>
 		/// <exception cref="System.ObjectDisposedException">If Dispose as already been called on the transaction</exception>
@@ -775,7 +782,7 @@ namespace FoundationDB.Client
 			// we are ready to go !
 		}
 
-		/// <summary>Throws if the transaction is not a valid state (for reading/writing)</summary>
+		/// <summary>Throws if the transaction is not in a valid state (for reading/writing)</summary>
 		/// <exception cref="System.ObjectDisposedException">If Dispose as already been called on the transaction</exception>
 		public void EnsureNotFailedOrDisposed()
 		{
@@ -823,7 +830,7 @@ namespace FoundationDB.Client
 		/// <summary>
 		/// Destroy the transaction and release all allocated resources, including all non-committed changes.
 		/// </summary>
-		/// <remarks>This instance will not be usable again and most methods will throws an ObjectDisposedException.</remarks>
+		/// <remarks>This instance will not be usable again and most methods will throw an ObjectDisposedException.</remarks>
 		public void Dispose()
 		{
 			// note: we can be called by user code, or by the FdbDatabase when it is terminating with pending transactions

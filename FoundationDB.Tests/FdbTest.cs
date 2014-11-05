@@ -1,5 +1,5 @@
 ﻿#region BSD Licence
-/* Copyright (c) 2013, Doxense SARL
+/* Copyright (c) 2013-2014, Doxense SAS
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -32,9 +32,11 @@ namespace FoundationDB.Client.Tests
 	using NUnit.Framework;
 	using System;
 	using System.Diagnostics;
+	using System.Globalization;
 	using System.Threading;
 	using System.Threading.Tasks;
 
+	/// <summary>Base class for all FoundationDB tests</summary>
 	public abstract class FdbTest
 	{
 
@@ -50,7 +52,19 @@ namespace FoundationDB.Client.Tests
 				m_cts = null;
 				m_ct = CancellationToken.None;
 			}
-			Trace.WriteLine("=== " + TestContext.CurrentContext.Test.FullName + "() === " + DateTime.Now.TimeOfDay);
+
+			//note: some test runners fail with a nulref in the Test.FullName property ...
+			string fullName;
+			try
+			{
+				fullName = TestContext.CurrentContext.Test.FullName;
+			}
+			catch
+			{
+				fullName = this.GetType().Name + ".???";
+			}
+			Trace.WriteLine("=== " + fullName + "() === " + DateTime.Now.TimeOfDay);
+
 			m_timer = Stopwatch.StartNew();
 		}
 
@@ -65,6 +79,7 @@ namespace FoundationDB.Client.Tests
 			}
 		}
 
+		/// <summary>Time elapsed since the start of the current test</summary>
 		protected TimeSpan TestElapsed
 		{
 			get { return m_timer.Elapsed; }
@@ -122,5 +137,32 @@ namespace FoundationDB.Client.Tests
 				await tr.CommitAsync();
 			}
 		}
+
+		#region Logging...
+
+		// These methods are just there to help with the problem of culture-aware string formatting
+
+		protected void Log(string text)
+		{
+			Console.WriteLine(text);
+		}
+
+		protected void Log(string format, object arg0)
+		{
+			Console.WriteLine(String.Format(CultureInfo.InvariantCulture, format, arg0));
+		}
+
+		protected void Log(string format, object arg0, object arg1)
+		{
+			Console.WriteLine(String.Format(CultureInfo.InvariantCulture, format, arg0, arg1));
+		}
+
+		protected void Log(string format, params object[] args)
+		{
+			Console.WriteLine(String.Format(CultureInfo.InvariantCulture, format, args));
+		}
+
+		#endregion
+
 	}
 }

@@ -267,7 +267,7 @@ namespace FoundationDB.Layers.Tuples
 			writer.EnsureBytes(5);
 			var buffer = writer.Buffer;
 			int p = writer.Position;
-			buffer[p + 0] = 0x20;
+			buffer[p + 0] = FdbTupleTypes.Single;
 			buffer[p + 1] = (byte)(bits >> 24);
 			buffer[p + 2] = (byte)(bits >> 16);
 			buffer[p + 3] = (byte)(bits >> 8);
@@ -303,7 +303,7 @@ namespace FoundationDB.Layers.Tuples
 			writer.EnsureBytes(9);
 			var buffer = writer.Buffer;
 			int p = writer.Position;
-			buffer[p] = 0x21;
+			buffer[p] = FdbTupleTypes.Double;
 			buffer[p + 1] = (byte)(bits >> 56);
 			buffer[p + 2] = (byte)(bits >> 48);
 			buffer[p + 3] = (byte)(bits >> 40);
@@ -441,7 +441,7 @@ namespace FoundationDB.Layers.Tuples
 			// Here we know that there is at least one unicode char, and that there are no \0
 			// We will tterate through the string, filling as much of the buffer as possible
 
-			bool done = false;
+			bool done;
 			int charsUsed, bytesUsed;
 			int remaining = count;
 			ptr = chars;
@@ -598,27 +598,40 @@ namespace FoundationDB.Layers.Tuples
 		public static void WriteGuid(ref SliceWriter writer, Guid value)
 		{
 			writer.EnsureBytes(17);
-			writer.UnsafeWriteByte(FdbTupleTypes.Guid);
+			writer.UnsafeWriteByte(FdbTupleTypes.Uuid128);
 			unsafe
 			{
 				// UUIDs are stored using the RFC 4122 standard, so we need to swap some parts of the System.Guid
 
 				byte* ptr = stackalloc byte[16];
-				Uuid.Write(value, ptr);
+				Uuid128.Write(value, ptr);
 				writer.UnsafeWriteBytes(ptr, 16);
 			}
 		}
 
 		/// <summary>Writes a RFC 4122 encoded 128-bit UUID</summary>
-		public static void WriteUuid(ref SliceWriter writer, Uuid value)
+		public static void WriteUuid128(ref SliceWriter writer, Uuid128 value)
 		{
 			writer.EnsureBytes(17);
-			writer.UnsafeWriteByte(FdbTupleTypes.Guid);
+			writer.UnsafeWriteByte(FdbTupleTypes.Uuid128);
 			unsafe
 			{
 				byte* ptr = stackalloc byte[16];
 				value.WriteTo(ptr);
 				writer.UnsafeWriteBytes(ptr, 16);
+			}
+		}
+
+		/// <summary>Writes a 64-bit UUID</summary>
+		public static void WriteUuid64(ref SliceWriter writer, Uuid64 value)
+		{
+			writer.EnsureBytes(9);
+			writer.UnsafeWriteByte(FdbTupleTypes.Uuid64);
+			unsafe
+			{
+				byte* ptr = stackalloc byte[8];
+				value.WriteTo(ptr);
+				writer.UnsafeWriteBytes(ptr, 8);
 			}
 		}
 
@@ -639,7 +652,7 @@ namespace FoundationDB.Layers.Tuples
 			}
 
 			if (bytes > 8) throw new FormatException("Invalid size for tuple integer");
-			long value = (long)slice.ReadUInt64(1, bytes);
+			long value = (long)slice.ReadUInt64BE(1, bytes);
 
 			if (neg)
 			{ // the value is encoded as the one's complement of the absolute value
@@ -732,18 +745,100 @@ namespace FoundationDB.Layers.Tuples
 			return Encoding.UTF8.GetString(decoded.Array, decoded.Offset, decoded.Count);
 		}
 
+		internal static float ParseSingle(Slice slice)
+		{
+			Contract.Requires(slice.HasValue && slice[0] == FdbTupleTypes.Single);
+
+			if (slice.Count != 5)
+			{
+				throw new FormatException("Slice has invalid size for a Single");
+			}
+
+			// We need to reverse encoding process: if first byte < 0x80 then it is negative (bits need to be flipped), else it is positive (highest bit must be set to 0)
+
+			// read the raw bits
+			uint bits = slice.ReadUInt32BE(1, 4); //OPTIMIZE: inline version?
+
+			if ((bits & 0x80000000U) == 0)
+			{ // negative
+				bits = ~bits;
+			}
+			else
+			{ // postive
+				bits ^= 0x80000000U;
+			}
+
+			float value;
+			unsafe { value = *((float*)&bits); }
+
+			return value;
+		}
+
+		internal static double ParseDouble(Slice slice)
+		{
+			Contract.Requires(slice.HasValue && slice[0] == FdbTupleTypes.Double);
+
+			if (slice.Count != 9)
+			{
+				throw new FormatException("Slice has invalid size for a Double");
+			}
+
+			// We need to reverse encoding process: if first byte < 0x80 then it is negative (bits need to be flipped), else it is positive (highest bit must be set to 0)
+
+			// read the raw bits
+			ulong bits = slice.ReadUInt64BE(1, 8); //OPTIMIZE: inline version?
+
+			if ((bits & 0x8000000000000000UL) == 0)
+			{ // negative
+				bits = ~bits;
+			}
+			else
+			{ // postive
+				bits ^= 0x8000000000000000UL;
+			}
+
+			// note: we could use BitConverter.Int64BitsToDouble(...), but it does the same thing, and also it does not exist for floats...
+			double value;
+			unsafe { value = *((double*)&bits); }
+
+			return value;
+		}
+
 		internal static Guid ParseGuid(Slice slice)
 		{
-			Contract.Requires(slice.HasValue && slice[0] == FdbTupleTypes.Guid);
+			Contract.Requires(slice.HasValue && slice[0] == FdbTupleTypes.Uuid128);
 
 			if (slice.Count != 17)
 			{
-				//TODO: usefull! error message! 
-				throw new FormatException("Slice has invalid size for a guid");
+				throw new FormatException("Slice has invalid size for a GUID");
 			}
 
 			// We store them in RFC 4122 under the hood, so we need to reverse them to the MS format
-			return Uuid.Convert(new Slice(slice.Array, slice.Offset + 1, 16));
+			return Uuid128.Convert(new Slice(slice.Array, slice.Offset + 1, 16));
+		}
+
+		internal static Uuid128 ParseUuid128(Slice slice)
+		{
+			Contract.Requires(slice.HasValue && slice[0] == FdbTupleTypes.Uuid128);
+
+			if (slice.Count != 17)
+			{
+				throw new FormatException("Slice has invalid size for a 128-bit UUID");
+			}
+
+			return new Uuid128(new Slice(slice.Array, slice.Offset + 1, 8));
+		}
+
+		internal static Uuid64 ParseUuid64(Slice slice)
+		{
+			Contract.Requires(slice.HasValue && slice[0] == FdbTupleTypes.Uuid64);
+
+			if (slice.Count != 9)
+			{
+				throw new FormatException("Slice has invalid size for a 64-bit UUID");
+			}
+
+			return new Uuid64(new Slice(slice.Array, slice.Offset + 1, 8));
 		}
 
 		#endregion

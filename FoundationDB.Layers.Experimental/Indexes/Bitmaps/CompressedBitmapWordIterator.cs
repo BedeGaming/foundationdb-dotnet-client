@@ -1,5 +1,5 @@
 ﻿#region BSD Licence
-/* Copyright (c) 2013, Doxense SARL
+/* Copyright (c) 2013-2014, Doxense SAS
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -26,33 +26,65 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #endregion
 
-namespace FoundationDB.Layers.Interning
+namespace FoundationDB.Layers.Experimental.Indexing
 {
 	using FoundationDB.Client;
+	using FoundationDB.Client.Utils;
 	using System;
-	using System.Threading;
-	using System.Threading.Tasks;
+	using System.Collections.Generic;
 
-	public static class FdbStringInternTransactionals
+	/// <summary>Iterator that reads 32-bit compressed words from a compressed bitmap</summary>
+	public struct CompressedBitmapWordIterator : IEnumerator<CompressedWord>
 	{
+		/// <summary>Source of compressed words</summary>
+		private SliceReader m_reader;
+		private uint m_current;
 
-		/// <summary>Look up string <paramref name="value"/> in the intern database and return its normalized representation. If value already exists, intern returns the existing representation.</summary>
-		/// <param name="db">Fdb database</param>
-		/// <param name="value">String to intern</param>
-		/// <returns>Normalized representation of the string</returns>
-		/// <remarks>The length of the string <paramref name="value"/> must not exceed the maximum FoundationDB value size</remarks>
-		public static Task<Slice> InternAsync(this FdbStringIntern self, IFdbTransactional db, string value, CancellationToken cancellationToken)
+		internal CompressedBitmapWordIterator(Slice buffer)
 		{
-			return db.ReadWriteAsync((tr) => self.InternAsync(tr, value), cancellationToken);
+			Contract.Requires((buffer.Count & 3) == 0 && (buffer.Count == 0 || buffer.Count >= 8));
+			if (buffer.Count == 0)
+			{
+				m_reader = new SliceReader();
+			}
+			else
+			{ // skip the header
+				m_reader = new SliceReader(buffer.Substring(4));
+			}
+			m_current = 0;
 		}
 
-		/// <summary>Return the long string associated with the normalized representation <paramref name="uid"/></summary>
-		/// <param name="db">Fdb database</param>
-		/// <param name="uid">Interned uid of the string</param>
-		/// <returns>Original value of the interned string, or an exception if it does it does not exist</returns>
-		public static Task<string> LookupAsync(this FdbStringIntern self, IFdbReadOnlyTransactional db, Slice uid, CancellationToken cancellationToken)
+		public bool MoveNext()
 		{
-			return db.ReadAsync((tr) => self.LookupAsync(tr, uid), cancellationToken);
+			if (m_reader.Remaining < 4)
+			{
+				m_current = 0;
+				return false;
+			}
+			m_current = m_reader.ReadFixed32();
+			return true;
+		}
+
+		public CompressedWord Current
+		{
+			get { return new CompressedWord(m_current); }
+		}
+
+		object System.Collections.IEnumerator.Current
+		{
+			get { return this.Current; }
+		}
+
+		public void Reset()
+		{
+			m_reader.Position = 0;
+			m_current = 0;
+		}
+
+		public void Dispose()
+		{
+			m_reader = default(SliceReader);
+			m_current = 0;
 		}
 
 	}

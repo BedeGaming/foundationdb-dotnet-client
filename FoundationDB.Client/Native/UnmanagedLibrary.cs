@@ -38,7 +38,21 @@ namespace FoundationDB.Client.Native
 	/// <summary>Native Library Loader</summary>
 	internal sealed class UnmanagedLibrary : IDisposable
 	{
+
+
 		// See http://msdn.microsoft.com/msdnmag/issues/05/10/Reliability/ for more about safe handles.
+
+#if MONO
+		[SuppressUnmanagedCodeSecurity]
+		public sealed class SafeLibraryHandle : FdbSafeHandle
+		{
+
+			protected override void Destroy(IntPtr handle)
+			{
+				NativeMethods.FreeLibrary(handle);
+			}
+		}
+#else
 		[SuppressUnmanagedCodeSecurity]
 		public sealed class SafeLibraryHandle : SafeHandleZeroOrMinusOneIsInvalid
 		{
@@ -49,10 +63,31 @@ namespace FoundationDB.Client.Native
 				return NativeMethods.FreeLibrary(handle);
 			}
 		}
+#endif
+
 
 		[SuppressUnmanagedCodeSecurity]
 		private static class NativeMethods
 		{
+#if MONO
+			const string KERNEL = "dl";
+
+			[DllImport(KERNEL)]
+			public static extern SafeLibraryHandle dlopen(string fileName, int flags);
+
+			[DllImport(KERNEL, SetLastError = true)]
+			[return: MarshalAs(UnmanagedType.Bool)]
+			public static extern int dlclose(IntPtr hModule);
+
+			public static SafeLibraryHandle LoadLibrary(string fileName)
+			{
+
+				return dlopen(fileName, 1);
+				
+			}
+			public static bool FreeLibrary(IntPtr hModule) { return dlclose(hModule) == 0; }
+
+#else
 			const string KERNEL = "kernel32";
 
 			[DllImport(KERNEL, CharSet = CharSet.Auto, BestFitMapping = false, SetLastError = true)]
@@ -62,6 +97,7 @@ namespace FoundationDB.Client.Native
 			[DllImport(KERNEL, SetLastError = true)]
 			[return: MarshalAs(UnmanagedType.Bool)]
 			public static extern bool FreeLibrary(IntPtr hModule);
+#endif
 		}
 
 		/// <summary>Load a native library into the current process</summary>

@@ -1,5 +1,5 @@
 ﻿#region BSD Licence
-/* Copyright (c) 2013, Doxense SARL
+/* Copyright (c) 2013-2014, Doxense SAS
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -26,49 +26,66 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #endregion
 
-namespace FoundationDB.Layers.Counters
+namespace FoundationDB.Layers.Experimental.Indexing
 {
+	using JetBrains.Annotations;
 	using System;
-	using System.Threading;
-	using System.Threading.Tasks;
+	using System.Collections.Generic;
 
-	[Obsolete("This is obsoleted by atomic operations")]
-	public static class FdbCounterTransactionals
+	/// <summary>View that reads the indexes of all the set bits in a bitmap</summary>
+	public class CompressedBitmapBitView : IEnumerable<int>
 	{
+		private readonly CompressedBitmap m_bitmap;
 
-		/// <summary>
-		/// Get the value of the counter.
-		/// Not recommended for use with read/write transactions when the counter is being frequently updated (conflicts will be very likely).
-		/// </summary>
-		public static Task<long> GetTransactionalAsync(this FdbCounter self, CancellationToken cancellationToken)
+		public CompressedBitmapBitView(CompressedBitmap bitmap)
 		{
-			return self.Database.ReadAsync((tr) => self.GetTransactional(tr), cancellationToken);
+			if (bitmap == null) throw new ArgumentNullException("bitmap");
+			m_bitmap = bitmap;
 		}
 
-		/// <summary>
-		/// Get the value of the counter with snapshot isolation (no transaction conflicts).
-		/// </summary>
-		public static Task<long> GetSnapshotAsync(this FdbCounter self, CancellationToken cancellationToken)
+		public CompressedBitmap Bitmap
 		{
-			return self.Database.ReadAsync((tr) => self.GetSnapshot(tr), cancellationToken);
+			[NotNull]
+			get { return m_bitmap; }
 		}
 
-		/// <summary>
-		/// Add the value x to the counter.
-		/// </summary>
-		public static Task AddAsync(this FdbCounter self, long x, CancellationToken cancellationToken)
+		public IEnumerator<int> GetEnumerator()
 		{
-			return self.Database.WriteAsync((tr) => self.Add(tr, x), cancellationToken);
+			int offset = 0;
+			foreach (var word in m_bitmap)
+			{
+				if (word.IsLiteral)
+				{
+					int value = word.Literal;
+					if (value > 0)
+					{
+						for (int i = 0; i < 31; i++)
+						{
+							if ((value & (1 << i)) != 0) yield return offset + i;
+						}
+					}
+					offset += 31;
+				}
+				else if (word.FillBit == 0)
+				{ // skip it
+					offset += word.FillCount * 31;
+				}
+				else
+				{ // all ones
+					int n = word.FillCount * 31;
+					for (int i = 0; i < n; i++)
+					{
+						yield return offset + i;
+					}
+					offset += n;
+				}
+			}
 		}
 
-		/// <summary>
-		/// Set the counter to value x.
-		/// </summary>
-		public static Task SetTotalAsync(this FdbCounter self, long x, CancellationToken cancellationToken)
+		System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
 		{
-			return self.Database.ReadWriteAsync((tr) => self.SetTotal(tr, x), cancellationToken);
+			return this.GetEnumerator();
 		}
-
 	}
 
 }

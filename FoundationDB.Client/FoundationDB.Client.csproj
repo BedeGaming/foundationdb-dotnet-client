@@ -67,6 +67,7 @@
     <Compile Include="Encoders\IKeyValueEncoder.cs" />
     <Compile Include="Encoders\FdbEncoderSubspace`1.cs" />
     <Compile Include="FdbEndPoint.cs" />
+    <Compile Include="FdbIsolationLevel.cs" />
     <Compile Include="Layers\Directories\FdbDirectoryPartition.cs" />
     <Compile Include="Layers\Directories\IFdbDirectory.cs" />
     <Compile Include="Native\FdbNativeCluster.cs" />
@@ -194,7 +195,8 @@
     <Compile Include="Utils\SliceHelpers.cs" />
     <Compile Include="Utils\SliceComparer.cs" />
     <Compile Include="Utils\SliceBuffer.cs" />
-    <Compile Include="Utils\Uuid.cs" />
+    <Compile Include="Utils\Uuid64.cs" />
+    <Compile Include="Utils\Uuid128.cs" />
     <Compile Include="Utils\SliceListStream.cs" />
     <Compile Include="Utils\SliceStream.cs" />
     <Compile Include="Utils\Logging.cs" />

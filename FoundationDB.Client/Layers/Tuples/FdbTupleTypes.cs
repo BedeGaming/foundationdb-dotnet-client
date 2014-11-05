@@ -70,8 +70,15 @@ namespace FoundationDB.Layers.Tuples
 		/// <summary>Base value for integer types (20 +/- n)</summary>
 		internal const int IntBase = 20;
 
+		/// <summary>Single precision decimals (32-bit, Big-Endian) [DRAFT]</summary>
+		internal const byte Single = 32;
+		/// <summary>Double precision decimals (64-bit, Big-Endian) [DRAFT]</summary>
+		internal const byte Double = 33;
+
 		/// <summary>RFC4122 UUID (128 bits) [DRAFT]</summary>
-		internal const byte Guid = 48;
+		internal const byte Uuid128 = 48;
+		/// <summary>UUID (64 bits) [DRAFT]</summary>
+		internal const byte Uuid64 = 49; //TODO: this is not official yet! may change!
 
 		/// <summary>Standard prefix of the Directory Layer</summary>
 		/// <remarks>This is not a part of the tuple encoding itself, but helps the tuple decoder pretty-print tuples that would otherwise be unparsable.</remarks>

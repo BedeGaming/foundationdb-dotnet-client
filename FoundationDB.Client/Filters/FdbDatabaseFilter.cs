@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace FoundationDB.Filters
 {
 	using FoundationDB.Client;
+	using JetBrains.Annotations;
 	using System;
 	using System.Diagnostics;
 	using System.Threading;
@@ -73,8 +74,13 @@ namespace FoundationDB.Filters
 		#region Public Properties...
 
 		/// <summary>Database instance configured to read and write data from this partition</summary>
-		protected IFdbDatabase Database { get { return m_database; } }
+		protected IFdbDatabase Database
+		{
+			[NotNull]
+			get { return m_database; }
+		}
 
+		[NotNull]
 		internal IFdbDatabase GetInnerDatabase()
 		{
 			return m_database;
@@ -90,6 +96,7 @@ namespace FoundationDB.Filters
 		public IFdbCluster Cluster
 		{
 			//REVIEW: do we need a Cluster Filter ?
+			[NotNull]
 			get { return m_database.Cluster; }
 		}
 
@@ -102,11 +109,12 @@ namespace FoundationDB.Filters
 		/// <summary>Returns the global namespace used by this database instance</summary>
 		public FdbSubspace GlobalSpace
 		{
+			[NotNull]
 			get { return m_database.GlobalSpace; }
 		}
 
 		/// <summary>Directory partition of this database instance</summary>
-		public FdbDatabasePartition Directory
+		public virtual FdbDatabasePartition Directory
 		{
 			get
 			{
@@ -119,9 +127,24 @@ namespace FoundationDB.Filters
 		}
 
 		/// <summary>If true, this database instance will only allow starting read-only transactions.</summary>
-		public bool IsReadOnly
+		public virtual bool IsReadOnly
 		{
 			get { return m_readOnly; }
+		}
+
+		public virtual IFdbSubspace this[Slice suffix]
+		{
+			get { return m_database[suffix]; }
+		}
+
+		public virtual IFdbSubspace this[IFdbKey key]
+		{
+			get { return m_database[key]; }
+		}
+
+		public virtual bool Contains(Slice key)
+		{
+			return m_database.Contains(key);
 		}
 
 		#endregion
@@ -132,7 +155,7 @@ namespace FoundationDB.Filters
 		{
 			ThrowIfDisposed();
 
-			// enfore read-only mode!
+			// enforce read-only mode!
 			if (m_readOnly) mode |= FdbTransactionMode.ReadOnly;
 
 			if (context == null)
@@ -141,11 +164,6 @@ namespace FoundationDB.Filters
 			}
 
 			return m_database.BeginTransaction(mode, cancellationToken, context);
-		}
-
-		public virtual bool Contains(Slice key)
-		{
-			return m_database.Contains(key);
 		}
 
 		public Task ReadAsync(Func<IFdbReadOnlyTransaction, Task> asyncHandler, CancellationToken cancellationToken)

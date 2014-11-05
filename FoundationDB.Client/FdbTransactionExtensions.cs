@@ -124,6 +124,15 @@ namespace FoundationDB.Client
 
 		#region Get...
 
+		/// <summary>Reads a value from the database snapshot represented by by the current transaction.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Key to be looked up in the database</param>
+		/// <returns>Task that will return the value of the key if it is found, Slice.Nil if the key does not exist, or an exception</returns>
+		/// <exception cref="System.ArgumentException">If the <paramref name="key"/> is null</exception>
+		/// <exception cref="System.OperationCanceledException">If the cancellation token is already triggered</exception>
+		/// <exception cref="System.ObjectDisposedException">If the transaction has already been completed</exception>
+		/// <exception cref="System.InvalidOperationException">If the operation method is called from the Network Thread</exception>
 		public static Task<Slice> GetAsync<TKey>(this IFdbReadOnlyTransaction trans, TKey key)
 			where TKey : IFdbKey
 		{
@@ -132,6 +141,16 @@ namespace FoundationDB.Client
 			return trans.GetAsync(key.ToFoundationDbKey());
 		}
 
+		/// <summary>Reads and decode a value from the database snapshot represented by by the current transaction.</summary>
+		/// <typeparam name="TValue">Type of the value.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Key to be looked up in the database</param>
+		/// <param name="encoder">Encoder used to decode the value of the key.</param>
+		/// <returns>Task that will return the value of the key if it is found, Slice.Nil if the key does not exist, or an exception</returns>
+		/// <exception cref="System.ArgumentException">If the <paramref name="key"/> is null</exception>
+		/// <exception cref="System.OperationCanceledException">If the cancellation token is already triggered</exception>
+		/// <exception cref="System.ObjectDisposedException">If the transaction has already been completed</exception>
+		/// <exception cref="System.InvalidOperationException">If the operation method is called from the Network Thread</exception>
 		public static async Task<TValue> GetAsync<TValue>(this IFdbReadOnlyTransaction trans, Slice key, [NotNull] IValueEncoder<TValue> encoder)
 		{
 			if (trans == null) throw new ArgumentNullException("trans");
@@ -140,6 +159,17 @@ namespace FoundationDB.Client
 			return encoder.DecodeValue(await trans.GetAsync(key).ConfigureAwait(false));
 		}
 
+		/// <summary>Reads and decode a value from the database snapshot represented by by the current transaction.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <typeparam name="TValue">Type of the value.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Key to be looked up in the database</param>
+		/// <param name="encoder">Encoder used to decode the value of the key.</param>
+		/// <returns>Task that will return the value of the key if it is found, Slice.Nil if the key does not exist, or an exception</returns>
+		/// <exception cref="System.ArgumentException">If the <paramref name="key"/> is null</exception>
+		/// <exception cref="System.OperationCanceledException">If the cancellation token is already triggered</exception>
+		/// <exception cref="System.ObjectDisposedException">If the transaction has already been completed</exception>
+		/// <exception cref="System.InvalidOperationException">If the operation method is called from the Network Thread</exception>
 		public static Task<TValue> GetAsync<TKey, TValue>(this IFdbReadOnlyTransaction trans, TKey key, [NotNull] IValueEncoder<TValue> encoder)
 			where TKey : IFdbKey
 		{
@@ -151,6 +181,11 @@ namespace FoundationDB.Client
 
 		#region Set...
 
+		/// <summary>Set the value of a key in the database.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key"></param>
+		/// <param name="value"></param>
 		public static void Set<TKey>(this IFdbTransaction trans, TKey key, Slice value)
 			where TKey : IFdbKey
 		{
@@ -160,6 +195,12 @@ namespace FoundationDB.Client
 			trans.Set(key.ToFoundationDbKey(), value);
 		}
 
+		/// <summary>Set the value of a key in the database, using a custom value encoder.</summary>
+		/// <typeparam name="TValue">Type of the value</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Key to set</param>
+		/// <param name="value">Value of the key</param>
+		/// <param name="encoder">Encoder used to convert <paramref name="value"/> into a binary slice.</param>
 		public static void Set<TValue>(this IFdbTransaction trans, Slice key, TValue value, [NotNull] IValueEncoder<TValue> encoder)
 		{
 			if (trans == null) throw new ArgumentNullException("trans");
@@ -168,6 +209,13 @@ namespace FoundationDB.Client
 			trans.Set(key, encoder.EncodeValue(value));
 		}
 
+		/// <summary>Set the value of a key in the database, using a custom value encoder.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <typeparam name="TValue">Type of the value</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Key to set</param>
+		/// <param name="value">Value of the key</param>
+		/// <param name="encoder">Encoder used to convert <paramref name="value"/> into a binary slice.</param>
 		public static void Set<TKey, TValue>(this IFdbTransaction trans, TKey key, TValue value, [NotNull] IValueEncoder<TValue> encoder)
 			where TKey : IFdbKey
 		{
@@ -175,6 +223,11 @@ namespace FoundationDB.Client
 			Set<TValue>(trans, key.ToFoundationDbKey(), value, encoder);
 		}
 
+		/// <summary>Set the value of a key in the database, using the content of a Stream</summary>
+		/// <param name="trans">Trasaction instance</param>
+		/// <param name="key">Key to set</param>
+		/// <param name="data">Stream that holds the content of the key, whose length should not exceed the allowed maximum value size.</param>
+		/// <remarks>This method works best with streams that do not block, like a <see cref="MemoryStream"/>. For streams that may block, consider using <see cref="SetAsync(IFdbTransaction, Slice, Stream)"/> instead.</remarks>
 		public static void Set(this IFdbTransaction trans, Slice key, [NotNull] Stream data)
 		{
 			if (trans == null) throw new ArgumentNullException("trans");
@@ -187,6 +240,11 @@ namespace FoundationDB.Client
 			trans.Set(key, value);
 		}
 
+		/// <summary>Set the value of a key in the database, by reading the content of a Stream asynchronously</summary>
+		/// <param name="trans">Trasaction instance</param>
+		/// <param name="key">Key to set</param>
+		/// <param name="data">Stream that holds the content of the key, whose length should not exceed the allowed maximum value size.</param>
+		/// <remarks>If reading from the stream takes more than 5 seconds, the transaction will not be able to commit. For streams that are stored in memory, like a MemoryStream, consider using <see cref="Set(IFdbTransaction, Slice, Stream)"/> instead.</remarks>
 		public static async Task SetAsync(this IFdbTransaction trans, Slice key, [NotNull] Stream data)
 		{
 			if (trans == null) throw new ArgumentNullException("trans");
@@ -201,8 +259,109 @@ namespace FoundationDB.Client
 
 		#endregion
 
+		#region SetValues
+
+		/// <summary>Set the values of a list of keys in the database.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="keyValuePairs">Array of key and value pairs</param>
+		/// <remarks>
+		/// Only use this method if you know that the approximate size of count of keys and values will not exceed the maximum size allowed per transaction.
+		/// If the list and size of the keys and values is not known in advance, consider using a bulk operation provided by the <see cref="Fdb.Bulk"/> helper class.
+		/// </remarks>
+		/// <exception cref="ArgumentNullException">If either <paramref name="trans"/> or <paramref name="keyValuePairs"/> is null.</exception>
+		/// <exception cref="FdbException">If this operation would exceed the maximum allowed size for a transaction.</exception>
+		public static void SetValues(this IFdbTransaction trans, KeyValuePair<Slice, Slice>[] keyValuePairs)
+		{
+			if (trans == null) throw new ArgumentNullException("trans");
+			if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
+
+			foreach (var kv in keyValuePairs)
+			{
+				trans.Set(kv.Key, kv.Value);
+			}
+		}
+
+		/// <summary>Set the values of a list of keys in the database.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="keys">Array of keys to set</param>
+		/// <param name="values">Array of values for each key. Must be in the same order as <paramref name="keys"/> and have the same length.</param>
+		/// <remarks>
+		/// Only use this method if you know that the approximate size of count of keys and values will not exceed the maximum size allowed per transaction.
+		/// If the list and size of the keys and values is not known in advance, consider using a bulk operation provided by the <see cref="Fdb.Bulk"/> helper class.
+		/// </remarks>
+		/// <exception cref="ArgumentNullException">If either <paramref name="trans"/>, <paramref name="keys"/> or <paramref name="values"/> is null.</exception>
+		/// <exception cref="ArgumentException">If the <paramref name="values"/> does not have the same length as <paramref name="keys"/>.</exception>
+		/// <exception cref="FdbException">If this operation would exceed the maximum allowed size for a transaction.</exception>
+		public static void SetValues(this IFdbTransaction trans, Slice[] keys, Slice[] values)
+		{
+			if (trans == null) throw new ArgumentNullException("trans");
+			if (keys == null) throw new ArgumentNullException("keys");
+			if (values == null) throw new ArgumentNullException("values");
+			if (values.Length != keys.Length) throw new ArgumentException("Both key and value arrays must have the same size.", "values");
+
+			for (int i = 0; i < keys.Length;i++)
+			{
+				trans.Set(keys[i], values[i]);
+			}
+		}
+
+		/// <summary>Set the values of a sequence of keys in the database.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="keyValuePairs">Sequence of key and value pairs</param>
+		/// <remarks>
+		/// Only use this method if you know that the approximate size of count of keys and values will not exceed the maximum size allowed per transaction.
+		/// If the list and size of the keys and values is not known in advance, consider using a bulk operation provided by the <see cref="Fdb.Bulk"/> helper class.
+		/// </remarks>
+		/// <exception cref="ArgumentNullException">If either <paramref name="trans"/> or <paramref name="keyValuePairs"/> is null.</exception>
+		/// <exception cref="FdbException">If this operation would exceed the maximum allowed size for a transaction.</exception>
+		public static void SetValues(this IFdbTransaction trans, IEnumerable<KeyValuePair<Slice, Slice>> keyValuePairs)
+		{
+			if (trans == null) throw new ArgumentNullException("trans");
+			if (keyValuePairs == null) throw new ArgumentNullException("keyValuePairs");
+
+			foreach (var kv in keyValuePairs)
+			{
+				trans.Set(kv.Key, kv.Value);
+			}
+		}
+
+		/// <summary>Set the values of a sequence of keys in the database.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="keys">Sequence of keys to set</param>
+		/// <param name="values">Sequence of values for each key. Must be in the same order as <paramref name="keys"/> and have the same number of elements.</param>
+		/// <remarks>
+		/// Only use this method if you know that the approximate size of count of keys and values will not exceed the maximum size allowed per transaction.
+		/// If the list and size of the keys and values is not known in advance, consider using a bulk operation provided by the <see cref="Fdb.Bulk"/> helper class.
+		/// </remarks>
+		/// <exception cref="ArgumentNullException">If either <paramref name="trans"/>, <paramref name="keys"/> or <paramref name="values"/> is null.</exception>
+		/// <exception cref="ArgumentException">If the <paramref name="values"/> does not have the same number of elements as <paramref name="keys"/>.</exception>
+		/// <exception cref="FdbException">If this operation would exceed the maximum allowed size for a transaction.</exception>
+		public static void SetValues(this IFdbTransaction trans, IEnumerable<Slice> keys, IEnumerable<Slice> values)
+		{
+			if (trans == null) throw new ArgumentNullException("trans");
+			if (keys == null) throw new ArgumentNullException("keys");
+			if (values == null) throw new ArgumentNullException("values");
+
+			using(var keyIter = keys.GetEnumerator())
+			using(var valueIter = values.GetEnumerator())
+			{
+				while(keyIter.MoveNext())
+				{
+					if (!valueIter.MoveNext()) throw new ArgumentException("Both key and value sequences must have the same size.", "values");
+					trans.Set(keyIter.Current, valueIter.Current);
+				}
+				if (valueIter.MoveNext()) throw new ArgumentException("Both key and values sequences must have the same size.", "values");
+			}
+		}
+
+		#endregion
+
 		#region Atomic Ops...
 
+		/// <summary>Modify the database snapshot represented by this transaction to add the value of <paramref name="value"/> to the value stored by the given <paramref name="key"/>.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="value">Value to add to existing value of key.</param>
 		public static void AtomicAdd(this IFdbTransaction trans, Slice key, Slice value)
 		{
 			if (trans == null) throw new ArgumentNullException("trans");
@@ -210,6 +369,11 @@ namespace FoundationDB.Client
 			trans.Atomic(key, value, FdbMutationType.Add);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to add <paramref name="value"/> to the value stored by the given <paramref name="key"/>.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="value">Value to add to existing value of key.</param>
 		public static void AtomicAdd<TKey>(this IFdbTransaction trans, TKey key, Slice value)
 			where TKey : IFdbKey
 		{
@@ -219,6 +383,10 @@ namespace FoundationDB.Client
 			trans.Atomic(key.ToFoundationDbKey(), value, FdbMutationType.Add);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to perform a bitwise AND between <paramref name="mask"/> and the value stored by the given <paramref name="key"/>.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="mask">Bit mask.</param>
 		public static void AtomicAnd(this IFdbTransaction trans, Slice key, Slice mask)
 		{
 			//TODO: rename this to AtomicBitAnd(...) ?
@@ -227,6 +395,11 @@ namespace FoundationDB.Client
 			trans.Atomic(key, mask, FdbMutationType.BitAnd);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to perform a bitwise AND between <paramref name="mask"/> and the value stored by the given <paramref name="key"/>.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="mask">Bit mask.</param>
 		public static void AtomicAnd<TKey>(this IFdbTransaction trans, TKey key, Slice mask)
 			where TKey : IFdbKey
 		{
@@ -237,6 +410,10 @@ namespace FoundationDB.Client
 			trans.Atomic(key.ToFoundationDbKey(), mask, FdbMutationType.BitAnd);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to perform a bitwise OR between <paramref name="mask"/> and the value stored by the given <paramref name="key"/>.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="mask">Bit mask.</param>
 		public static void AtomicOr(this IFdbTransaction trans, Slice key, Slice mask)
 		{
 			//TODO: rename this to AtomicBitOr(...) ?
@@ -245,6 +422,11 @@ namespace FoundationDB.Client
 			trans.Atomic(key, mask, FdbMutationType.BitOr);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to perform a bitwise OR between <paramref name="mask"/> and the value stored by the given <paramref name="key"/>.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="mask">Bit mask.</param>
 		public static void AtomicOr<TKey>(this IFdbTransaction trans, TKey key, Slice mask)
 			where TKey : IFdbKey
 		{
@@ -255,6 +437,10 @@ namespace FoundationDB.Client
 			trans.Atomic(key.ToFoundationDbKey(), mask, FdbMutationType.BitOr);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to perform a bitwise XOR between <paramref name="mask"/> and the value stored by the given <paramref name="key"/>.</summary>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="mask">Bit mask.</param>
 		public static void AtomicXor(this IFdbTransaction trans, Slice key, Slice mask)
 		{
 			//TODO: rename this to AtomicBitXOr(...) ?
@@ -263,6 +449,11 @@ namespace FoundationDB.Client
 			trans.Atomic(key, mask, FdbMutationType.BitXor);
 		}
 
+		/// <summary>Modify the database snapshot represented by this transaction to perform a bitwise XOR between <paramref name="mask"/> and the value stored by the given <paramref name="key"/>.</summary>
+		/// <typeparam name="TKey">Type of the key that implements IFdbKey.</typeparam>
+		/// <param name="trans">Transaction instance</param>
+		/// <param name="key">Name of the key whose value is to be mutated.</param>
+		/// <param name="mask">Bit mask.</param>
 		public static void AtomicXor<TKey>(this IFdbTransaction trans, TKey key, Slice mask)
 			where TKey : IFdbKey
 		{

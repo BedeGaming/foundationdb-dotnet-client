@@ -40,13 +40,12 @@ namespace FoundationDB.Layers.Tuples
 	/// <summary>Helper methods used during serialization of values to the tuple binary format</summary>
 	public static class FdbTuplePackers
 	{
-		private static readonly Slice[] NoSlices = new Slice[0];
 
 		public delegate void Encoder<in T>(ref SliceWriter writer, T value);
 
 		#region Serializers...
 
-		/// <summary>Returns a lambda that will be abl to serialize values of type <typeparamref name="T"/></summary>
+		/// <summary>Returns a lambda that will be able to serialize values of type <typeparamref name="T"/></summary>
 		/// <typeparam name="T">Type of values to serialize</typeparam>
 		/// <returns>Reusable action that knows how to serialize values of type <typeparamref name="T"/> into binary buffers, or an exception if the type is not supported</returns>
 		internal static Encoder<T> GetSerializer<T>(bool required)
@@ -169,9 +168,15 @@ namespace FoundationDB.Layers.Tuples
 						return;
 					}
 
-					if (value is Uuid)
+					if (value is Uuid128)
 					{
-						SerializeTo(ref writer, (Uuid)value);
+						SerializeTo(ref writer, (Uuid128)value);
+						return;
+					}
+
+					if (value is Uuid64)
+					{
+						SerializeTo(ref writer, (Uuid64)value);
 						return;
 					}
 
@@ -253,6 +258,16 @@ namespace FoundationDB.Layers.Tuples
 				case TypeCode.DateTime:
 				{
 					SerializeTo(ref writer, (DateTime)value);
+					return;
+				}
+				case TypeCode.Double:
+				{
+					SerializeTo(ref writer, (double)value);
+					return;
+				}
+				case TypeCode.Single:
+				{
+					SerializeTo(ref writer, (float)value);
 					return;
 				}
 			}
@@ -444,9 +459,15 @@ namespace FoundationDB.Layers.Tuples
 		}
 
 		/// <summary>Writes a Uuid as a 128-bit UUID</summary>
-		public static void SerializeTo(ref SliceWriter writer, Uuid value)
+		public static void SerializeTo(ref SliceWriter writer, Uuid128 value)
 		{
-			FdbTupleParser.WriteUuid(ref writer, value);
+			FdbTupleParser.WriteUuid128(ref writer, value);
+		}
+
+		/// <summary>Writes a Uuid as a 64-bit UUID</summary>
+		public static void SerializeTo(ref SliceWriter writer, Uuid64 value)
+		{
+			FdbTupleParser.WriteUuid64(ref writer, value);
 		}
 
 		/// <summary>Writes an IPaddress as a 32-bit (IPv4) or 128-bit (IPv6) byte array</summary>
@@ -510,14 +531,17 @@ namespace FoundationDB.Layers.Tuples
 					case FdbTupleTypes.Utf8: return FdbTupleParser.ParseUnicode(slice);
 				}
 			}
-			else if (type == FdbTupleTypes.Guid)
+			else
 			{
-				return FdbTupleParser.ParseGuid(slice);
-			}
-			else if (type >= FdbTupleTypes.AliasDirectory)
-			{
-				if (type == FdbTupleTypes.AliasSystem) return FdbTupleAlias.System;
-				return FdbTupleAlias.Directory;
+				switch (type)
+				{
+					case FdbTupleTypes.Single: return FdbTupleParser.ParseSingle(slice);
+					case FdbTupleTypes.Double: return FdbTupleParser.ParseDouble(slice);
+					case FdbTupleTypes.Uuid128: return FdbTupleParser.ParseGuid(slice);
+					case FdbTupleTypes.Uuid64: return FdbTupleParser.ParseUuid64(slice);
+					case FdbTupleTypes.AliasDirectory: return FdbTupleAlias.Directory;
+					case FdbTupleTypes.AliasSystem: return FdbTupleAlias.System;
+				}
 			}
 
 			throw new FormatException(String.Format("Cannot convert slice with unknown type code {0}", type));
@@ -634,9 +658,13 @@ namespace FoundationDB.Layers.Tuples
 					case FdbTupleTypes.Utf8: return FdbTupleParser.ParseUnicode(slice);
 				}
 			}
-			else if (type == FdbTupleTypes.Guid)
+			else if (type == FdbTupleTypes.Uuid128)
 			{
 				return FdbTupleParser.ParseGuid(slice).ToString();
+			}
+			else if (type == FdbTupleTypes.Uuid64)
+			{
+				return FdbTupleParser.ParseUuid64(slice).ToString();
 			}
 
 			throw new FormatException("Cannot convert slice into this type");
@@ -661,13 +689,71 @@ namespace FoundationDB.Layers.Tuples
 				{
 					return Guid.Parse(FdbTupleParser.ParseUnicode(slice));
 				}
-				case FdbTupleTypes.Guid:
+				case FdbTupleTypes.Uuid128:
 				{
 					return FdbTupleParser.ParseGuid(slice);
 				}
 			}
 
 			throw new FormatException(String.Format("Cannot convert slice of type {0} into System.Guid", type));
+		}
+
+		/// <summary>Deserialize a slice into 128-bit UUID</summary>
+		/// <param name="slice">Slice that contains a single packed element</param>
+		public static Uuid128 DeserializeUuid128(Slice slice)
+		{
+			if (slice.IsNullOrEmpty) return Uuid128.Empty;
+
+			int type = slice[0];
+
+			switch (type)
+			{
+				case FdbTupleTypes.Bytes:
+				{ // expect binary representation as a 16-byte array
+					return new Uuid128(FdbTupleParser.ParseBytes(slice));
+				}
+				case FdbTupleTypes.Utf8:
+				{ // expect text representation
+					return new Uuid128(FdbTupleParser.ParseUnicode(slice));
+				}
+				case FdbTupleTypes.Uuid128:
+				{
+					return FdbTupleParser.ParseUuid128(slice);
+				}
+			}
+
+			throw new FormatException(String.Format("Cannot convert slice of type {0} into Uuid128", type));
+		}
+
+		/// <summary>Deserialize a slice into 64-bit UUID</summary>
+		/// <param name="slice">Slice that contains a single packed element</param>
+		public static Uuid64 DeserializeUuid64(Slice slice)
+		{
+			if (slice.IsNullOrEmpty) return Uuid64.Empty;
+
+			int type = slice[0];
+
+			switch (type)
+			{
+				case FdbTupleTypes.Bytes:
+				{ // expect binary representation as a 16-byte array
+					return new Uuid64(FdbTupleParser.ParseBytes(slice));
+				}
+				case FdbTupleTypes.Utf8:
+				{ // expect text representation
+					return new Uuid64(FdbTupleParser.ParseUnicode(slice));
+				}
+				case FdbTupleTypes.Uuid64:
+				{
+					return FdbTupleParser.ParseUuid64(slice);
+				}
+			}
+			if (type >= FdbTupleTypes.IntZero && type <= FdbTupleTypes.IntPos8)
+			{ // expect 64-bit number
+				return new Uuid64(FdbTupleParser.ParseInt64(type, slice));
+			}
+
+			throw new FormatException(String.Format("Cannot convert slice of type {0} into Uuid64", type));
 		}
 
 		/// <summary>Deserialize a slice into Guid</summary>
@@ -688,7 +774,7 @@ namespace FoundationDB.Layers.Tuples
 				{
 					return System.Net.IPAddress.Parse(FdbTupleParser.ParseUnicode(slice));
 				}
-				case FdbTupleTypes.Guid:
+				case FdbTupleTypes.Uuid128:
 				{ // could be an IPv6 encoded as a 128-bits UUID
 					return new System.Net.IPAddress(slice.GetBytes());
 				}
@@ -734,7 +820,7 @@ namespace FoundationDB.Layers.Tuples
 			}
 
 			if (slicer.HasMore) throw new FormatException("Parsing of tuple failed failed before reaching the end of the key");
-			return new FdbSlicedTuple(p == 0 ? NoSlices : items, 0, p);
+			return new FdbSlicedTuple(p == 0 ? Slice.EmptySliceArray : items, 0, p);
 		}
 
 		/// <summary>Ensure that a slice is a packed tuple that contains a single and valid element</summary>
@@ -809,9 +895,22 @@ namespace FoundationDB.Layers.Tuples
 				{ // <02>(utf8 bytes)<00>
 					return reader.ReadByteString();
 				}
-				case FdbTupleTypes.Guid:
-				{ // <03>(16 bytes)
+
+				case FdbTupleTypes.Single:
+				{ // <20>(4 bytes)
+					return reader.ReadBytes(5);
+				}
+				case FdbTupleTypes.Double:
+				{ // <21>(8 bytes)
+					return reader.ReadBytes(9);
+				}
+				case FdbTupleTypes.Uuid128:
+				{ // <30>(16 bytes)
 					return reader.ReadBytes(17);
+				}
+				case FdbTupleTypes.Uuid64:
+				{ // <31>(8 bytes)
+					return reader.ReadBytes(9);
 				}
 
 				case FdbTupleTypes.AliasDirectory:

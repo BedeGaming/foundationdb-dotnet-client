@@ -71,8 +71,8 @@ namespace FoundationDB.Storage.Memory.API
 		[StructLayout(LayoutKind.Sequential)]
 		internal struct WriteCommand
 		{
-			public readonly Slice Key;
-			public readonly Slice Value;
+			public Slice Key; //PERF: readonly struct
+			public Slice Value; //PERF: readonly struct
 			public readonly Operation Type;
 
 			public WriteCommand(Operation type, Slice key, Slice value)
@@ -457,6 +457,15 @@ namespace FoundationDB.Storage.Memory.API
 			get { return m_buffer.Size; }
 		}
 
+		public FdbIsolationLevel IsolationLevel
+		{
+			get
+			{
+				//BUGBUG: this is currently a lie! until we support "ReadYourWrite", we actually only support Snapshot isolation level!
+				return FdbIsolationLevel.Serializable;
+			}
+		}
+
 		/// <summary>Adds a range to teh clear list of this transaction</summary>
 		/// <remarks>Must be called with m_lock taken</remarks>
 		private void AddClearCommand_NeedsLocking(FdbKeyRange range)
@@ -831,7 +840,10 @@ namespace FoundationDB.Storage.Memory.API
 			// we need the read version
 			EnsureHasReadVersion();
 
-			var result = await m_db.GetRangeAtVersion(beginInclusive, endExclusive, options.Limit.Value, options.TargetBytes.Value, options.Mode.Value, iteration, options.Reverse.Value, m_readVersion.Value).ConfigureAwait(false);
+			options = FdbRangeOptions.EnsureDefaults(options, null, null, FdbStreamingMode.Iterator, false);
+			options.EnsureLegalValues();
+
+			var result = await m_db.GetRangeAtVersion(beginInclusive, endExclusive, options.Limit ?? 0, options.TargetBytes ?? 0, options.Mode.Value, iteration, options.Reverse.Value, m_readVersion.Value).ConfigureAwait(false);
 
 			if (!snapshot)
 			{
@@ -1242,7 +1254,6 @@ namespace FoundationDB.Storage.Memory.API
 		{
 			Trace.WriteLine("MemoryTransactionHandler[#" + Thread.CurrentThread.ManagedThreadId + "]: " + msg);
 		}
-
 
 	}
 

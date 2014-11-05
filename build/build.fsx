@@ -6,7 +6,7 @@ open Fake
 RestorePackages()
 
 // Properties
-let version = "0.200.6-pre" //TODO: find a way to extract this from somewhere convenient
+let version = "0.9.8-pre" //TODO: find a way to extract this from somewhere convenient
 let buildDir = "./build/output/"
 let nugetPath = ".nuget/nuget.exe"
 let nugetOutDir = buildDir + "_packages/"
@@ -53,7 +53,7 @@ Target "Test" (fun _ ->
     CreateDir testDir
     ActivateFinalTarget "CloseTestRunner"
     !!(buildDir + "**/*Test*.dll")
-    ++(buildDir + "**/*Test*.exe")
+    //++(buildDir + "**/*Test*.exe")
     |> NUnit(
         fun p -> { p with DisableShadowCopy = true
                           OutputFile = "TestResults.xml"

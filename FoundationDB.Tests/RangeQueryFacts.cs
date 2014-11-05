@@ -30,6 +30,7 @@ namespace FoundationDB.Client.Tests
 {
 	using FoundationDB.Filters.Logging;
 	using FoundationDB.Layers.Tuples;
+	using FoundationDB.Layers.Directories;
 	using FoundationDB.Linq;
 	using NUnit.Framework;
 	using System;
@@ -53,7 +54,7 @@ namespace FoundationDB.Client.Tests
 			using (var db = await OpenTestPartitionAsync())
 			{
 				// put test values in a namespace
-				var location = await GetCleanDirectory(db, "range");
+				var location = await GetCleanDirectory(db, "Queries", "Range");
 
 				// insert all values (batched)
 				Console.WriteLine("Inserting " + N.ToString("N0") + " keys...");
@@ -81,8 +82,8 @@ namespace FoundationDB.Client.Tests
 					Assert.That(query.Transaction, Is.SameAs(tr));
 					Assert.That(query.Begin.Key, Is.EqualTo(location.Pack(0)));
 					Assert.That(query.End.Key, Is.EqualTo(location.Pack(N)));
-					Assert.That(query.Limit, Is.EqualTo(0));
-					Assert.That(query.TargetBytes, Is.EqualTo(0));
+					Assert.That(query.Limit, Is.Null);
+					Assert.That(query.TargetBytes, Is.Null);
 					Assert.That(query.Reversed, Is.False);
 					Assert.That(query.Mode, Is.EqualTo(FdbStreamingMode.Iterator));
 					Assert.That(query.Snapshot, Is.False);
@@ -125,7 +126,7 @@ namespace FoundationDB.Client.Tests
 			using (var db = await OpenTestPartitionAsync())
 			{
 				// put test values in a namespace
-				var location = await GetCleanDirectory(db, "range");
+				var location = await GetCleanDirectory(db, "Queries", "Range");
 
 				var a = location.Partition("a");
 				var b = location.Partition("b");
@@ -277,12 +278,87 @@ namespace FoundationDB.Client.Tests
 		}
 
 		[Test]
+		public async Task Test_Can_Get_Range_With_Limit()
+		{
+			using (var db = await OpenTestPartitionAsync())
+			{
+
+				// put test values in a namespace
+				var location = await GetCleanDirectory(db, "Queries", "Range");
+
+				var a = location.Partition("a");
+
+				// insert a bunch of keys under 'a'
+				await db.WriteAsync((tr) =>
+				{
+					for (int i = 0; i < 10; i++)
+					{
+						tr.Set(a.Pack(i), Slice.FromInt32(i));
+					}
+					// add guard keys
+					tr.Set(location.Key, Slice.FromInt32(-1));
+					tr.Set(location.Key + (byte)255, Slice.FromInt32(-1));
+				}, this.Cancellation);
+
+				// Take(5) should return the first 5 items
+
+				using (var tr = db.BeginReadOnlyTransaction(this.Cancellation))
+				{
+					var query = tr.GetRange(a.ToRange()).Take(5);
+					Assert.That(query, Is.Not.Null);
+					Assert.That(query.Limit, Is.EqualTo(5));
+
+					var elements = await query.ToListAsync();
+					Assert.That(elements, Is.Not.Null);
+					Assert.That(elements.Count, Is.EqualTo(5));
+					for (int i = 0; i < 5; i++)
+					{
+						Assert.That(elements[i].Key, Is.EqualTo(a.Pack(i)));
+						Assert.That(elements[i].Value, Is.EqualTo(Slice.FromInt32(i)));
+					}
+				}
+
+				// Take(12) should return only the 10 items
+
+				using (var tr = db.BeginReadOnlyTransaction(this.Cancellation))
+				{
+					var query = tr.GetRange(a.ToRange()).Take(12);
+					Assert.That(query, Is.Not.Null);
+					Assert.That(query.Limit, Is.EqualTo(12));
+
+					var elements = await query.ToListAsync();
+					Assert.That(elements, Is.Not.Null);
+					Assert.That(elements.Count, Is.EqualTo(10));
+					for (int i = 0; i < 10; i++)
+					{
+						Assert.That(elements[i].Key, Is.EqualTo(a.Pack(i)));
+						Assert.That(elements[i].Value, Is.EqualTo(Slice.FromInt32(i)));
+					}
+				}
+
+				// Take(0) should return nothing
+
+				using (var tr = db.BeginReadOnlyTransaction(this.Cancellation))
+				{
+					var query = tr.GetRange(a.ToRange()).Take(0);
+					Assert.That(query, Is.Not.Null);
+					Assert.That(query.Limit, Is.EqualTo(0));
+
+					var elements = await query.ToListAsync();
+					Assert.That(elements, Is.Not.Null);
+					Assert.That(elements.Count, Is.EqualTo(0));
+				}
+
+			}
+		}
+
+		[Test]
 		public async Task Test_Can_Skip()
 		{
 			using (var db = await OpenTestPartitionAsync())
 			{
 				// put test values in a namespace
-				var location = await GetCleanDirectory(db, "range");
+				var location = await GetCleanDirectory(db, "Queries", "Range");
 
 				// import test data
 				var data = Enumerable.Range(0, 100).Select(x => new KeyValuePair<Slice, Slice>(location.Pack(x), Slice.FromFixed32(x)));
@@ -364,7 +440,7 @@ namespace FoundationDB.Client.Tests
 			using (var db = await OpenTestPartitionAsync())
 			{
 				// put test values in a namespace
-				var location = await GetCleanDirectory(db, "range");
+				var location = await GetCleanDirectory(db, "Queries", "Range");
 
 				// import test data
 				var data = Enumerable.Range(0, 30).Select(x => new KeyValuePair<Slice, Slice>(location.Pack(x), Slice.FromFixed32(x)));
@@ -406,8 +482,7 @@ namespace FoundationDB.Client.Tests
 
 			using(var db = await OpenTestPartitionAsync())
 			{
-
-				var location = db.Partition("MergeSort");
+				var location = await GetCleanDirectory(db, "Queries", "MergeSort");
 
 				// clear!
 				await db.ClearRangeAsync(location, this.Cancellation);
@@ -470,11 +545,7 @@ namespace FoundationDB.Client.Tests
 
 			using (var db = await OpenTestPartitionAsync())
 			{
-
-				var location = db.Partition("Intersect");
-
-				// clear!
-				await db.ClearRangeAsync(location, this.Cancellation);
+				var location = await GetCleanDirectory(db, "Queries", "Intersect");
 
 				// create K lists
 				var lists = Enumerable.Range(0, K).Select(i => location.Partition(i)).ToArray();
@@ -547,11 +618,8 @@ namespace FoundationDB.Client.Tests
 
 			using (var db = await OpenTestPartitionAsync())
 			{
-
-				var location = db.Partition("Except");
-
-				// clear!
-				await db.ClearRangeAsync(location, this.Cancellation);
+				// get a clean new directory
+				var location = await GetCleanDirectory(db, "Queries", "Except");
 
 				// create K lists
 				var lists = Enumerable.Range(0, K).Select(i => location.Partition(i)).ToArray();
@@ -610,6 +678,88 @@ namespace FoundationDB.Client.Tests
 						Assert.That(location.UnpackLast<int>(results[i].Key), Is.EqualTo(expected[i]));
 					}
 				}
+
+			}
+
+		}
+
+		[Test]
+		public async Task Test_Range_Except_Composite_Key()
+		{
+
+			using (var db = await OpenTestPartitionAsync())
+			{
+				// get a clean new directory
+				var location = await GetCleanDirectory(db, "Queries", "ExceptComposite");
+
+				// Items contains a list of all ("user", id) that were created
+				var locItems = await location.CreateOrOpenAsync(db, "Items", this.Cancellation);
+				// Processed contain the list of all ("user", id) that were processed
+				var locProcessed = await location.CreateOrOpenAsync(db, "Processed", this.Cancellation);
+
+				// the goal is to have a query that returns the list of all unprocessed items (ie: in Items but not in Processed)
+
+				await db.WriteAsync((tr) =>
+				{
+					// Items
+					tr.Set(locItems.Pack("userA", 10093), Slice.Empty);
+					tr.Set(locItems.Pack("userA", 19238), Slice.Empty);
+					tr.Set(locItems.Pack("userB", 20003), Slice.Empty);
+					// Processed
+					tr.Set(locProcessed.Pack("userA", 19238), Slice.Empty);
+				}, this.Cancellation);
+
+				// the query (Items ∩ Processed) should return (userA, 10093) and (userB, 20003)
+
+				// First Method: pass in a list of key ranges, and merge on the (Slice, Slice) pairs
+				Trace.WriteLine("Method 1:");
+				var results = await db.QueryAsync((tr) =>
+				{
+					var query = tr.Except(
+						new[] { locItems.ToRange(), locProcessed.ToRange() },
+						(kv) => FdbTuple.Unpack(kv.Key).Substring(-2), // note: keys come from any of the two ranges, so we must only keep the last 2 elements of the tuple
+						FdbTupleComparisons.Composite<string, int>() // compares t[0] as a string, and t[1] as an int
+					);
+
+					// problem: Except() still returns the original (Slice,Slice) pairs from the first range,
+					// meaning that we still need to unpack agin the key (this time knowing the location)
+					return query.Select(kv => locItems.Unpack(kv.Key));
+				}, this.Cancellation);
+
+				foreach(var r in results)
+				{
+					Trace.WriteLine(r);
+				}
+				Assert.That(results.Count, Is.EqualTo(2));
+				Assert.That(results[0], Is.EqualTo(FdbTuple.Create("userA", 10093)));
+				Assert.That(results[1], Is.EqualTo(FdbTuple.Create("userB", 20003)));
+
+				// Second Method: pre-parse the queries, and merge on the results directly
+				Trace.WriteLine("Method 2:");
+				results = await db.QueryAsync((tr) =>
+				{
+					var items = tr
+						.GetRange(locItems.ToRange())
+						.Select(kv => locItems.Unpack(kv.Key));
+
+					var processed = tr
+						.GetRange(locProcessed.ToRange())
+						.Select(kv => locProcessed.Unpack(kv.Key));
+
+					// items and processed are lists of (string, int) tuples, we can compare them directly
+					var query = items.Except(processed, FdbTupleComparisons.Composite<string, int>());
+
+					// query is already a list of tuples, nothing more to do
+					return query;
+				}, this.Cancellation);
+
+				foreach (var r in results)
+				{
+					Trace.WriteLine(r);
+				}
+				Assert.That(results.Count, Is.EqualTo(2));
+				Assert.That(results[0], Is.EqualTo(FdbTuple.Create("userA", 10093)));
+				Assert.That(results[1], Is.EqualTo(FdbTuple.Create("userB", 20003)));
 
 			}
 

@@ -39,7 +39,7 @@ namespace FoundationDB.Client
 		public static readonly FdbSubspace Empty = new FdbSubspace(Slice.Empty);
 
 		/// <summary>Binary prefix of this subspace</summary>
-		private readonly Slice m_rawPrefix;
+		private Slice m_rawPrefix; //PERF: readonly struct
 
 		/// <summary>Returns the key of this directory subspace</summary>
 		/// <remarks>This should only be used by methods that can use the key internally, even if it is not supposed to be exposed (as is the case for directory partitions)</remarks>
@@ -76,7 +76,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Create a new subspace from a Tuple prefix</summary>
 		/// <param name="tuple">Tuple packed to produce the prefix</param>
-		public FdbSubspace(IFdbTuple tuple)
+		public FdbSubspace([NotNull] IFdbTuple tuple)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 			m_rawPrefix = tuple.ToSlice().Memoize();
@@ -86,21 +86,31 @@ namespace FoundationDB.Client
 
 		#region Static Prefix Helpers...
 
+		/// <summary>Create a new Subspace using a binary key as the prefix</summary>
+		/// <param name="slice">Prefix of the new subspace</param>
+		/// <returns>New subspace that will use a copy of <paramref name="slice"/> as its prefix</returns>
 		[NotNull]
 		public static FdbSubspace Create(Slice slice)
 		{
 			return new FdbSubspace(slice);
 		}
 
+		/// <summary>Create a new Subspace using a tuples as the prefix</summary>
+		/// <param name="tuple">Tuple that represents the prefix of the new subspace</param>
+		/// <returns>New subspace instance that will use the packed representation of <paramref name="tuple"/> as its prefix</returns>
 		[NotNull]
-		public static FdbSubspace Create(IFdbTuple tuple)
+		public static FdbSubspace Create([NotNull] IFdbTuple tuple)
 		{
 			return new FdbSubspace(tuple);
 		}
 
+		/// <summary>Clone this subspace</summary>
+		/// <returns>New Subspace that uses the same prefix key</returns>
+		/// <remarks>Hint: Cloning a special Subspace like a <see cref="FdbDirectoryLayer"/>  or <see cref="FdbDirectoryPartition"/> will not keep all the "special abilities" of the parent.</remarks>
 		[NotNull]
-		internal FdbSubspace Copy()
+		public FdbSubspace Copy()
 		{
+			//SPOILER WARNING: You didn't hear it from me, but some say that you can use this to bypass the fact that FdbDirectoryPartition.get_Key and ToRange() throws in v2.x ... If you bypass this protection and bork your database, don't come crying!
 			return new FdbSubspace(this.InternalKey.Memoize());
 		}
 
@@ -116,14 +126,14 @@ namespace FoundationDB.Client
 			return m_rawPrefix;
 		}
 
-		/// <summary>Create a new subspace of the current subspace</summary>
+		/// <summary>Create a new subspace by adding a suffix to the key of the current subspace.</summary>
 		/// <param name="suffix">Binary suffix that will be appended to the current prefix</param>
 		/// <returns>New subspace whose prefix is the concatenation of the parent prefix, and <paramref name="suffix"/></returns>
 		public FdbSubspace this[Slice suffix]
 		{
 			// note: there is a difference with the Pyton layer because here we don't use Tuple encoding, but just concat the slices together.
 			// the .NET equivalent of the subspace.__getitem__(self, name) method would be subspace.Partition<Slice>(name) or subspace[FdbTuple.Create<Slice>(name)] !
-			[ContractAnnotation("null => halt; notnull => notnull")]
+			[NotNull]
 			get
 			{
 				if (suffix.IsNull) throw new ArgumentException("The subspace key cannot be null. Use Slice.Empty if you want a subspace with no prefix.", "suffix");
@@ -131,18 +141,28 @@ namespace FoundationDB.Client
 			}
 		}
 
-		/// <summary>Create a new subspace of the current subspace</summary>
-		/// <param name="tuple">Binary suffix that will be appended to the current prefix</param>
-		/// <returns>New subspace whose prefix is the concatenation of the parent prefix, and <paramref name="tuple"/></returns>
-		public FdbSubspace this[IFdbTuple tuple]
+		IFdbSubspace IFdbSubspace.this[Slice suffix]
+		{
+			get { return this[suffix]; }
+		}
+
+		/// <summary>Create a new subspace by adding a <paramref name="key"/> to the current subspace's prefix</summary>
+		/// <param name="key">Key that will be appended to the current prefix</param>
+		/// <returns>New subspace whose prefix is the concatenation of the parent prefix, and the packed representation of <paramref name="key"/></returns>
+		public FdbSubspace this[IFdbKey key]
 		{
 			[ContractAnnotation("null => halt; notnull => notnull")]
 			get
 			{
-				if (tuple == null) throw new ArgumentNullException("tuple");
-				if (tuple.Count == 0) return this;
-				return new FdbSubspace(FdbTuple.PackWithPrefix(GetKeyPrefix(), tuple));
+				if (key == null) throw new ArgumentNullException("key");
+				var packed = key.ToFoundationDbKey();
+				return packed.Count == 0 ? this : FdbSubspace.Create(GetKeyPrefix() + packed);
 			}
+		}
+
+		IFdbSubspace IFdbSubspace.this[IFdbKey key]
+		{
+			get { return this[key]; }
 		}
 
 		#endregion
@@ -337,6 +357,7 @@ namespace FoundationDB.Client
 			throw new ArgumentException(msg, "key");
 		}
 
+		[NotNull]
 		public virtual string DumpKey(Slice key)
 		{
 			// note: we can't use ExtractAndCheck(...) because it may throw in derived classes

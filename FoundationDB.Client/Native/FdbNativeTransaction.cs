@@ -91,6 +91,15 @@ namespace FoundationDB.Client.Native
 		/// <summary>Estimated size of the transaction payload (in bytes)</summary>
 		public int Size { get { return m_payloadBytes; } }
 
+		public FdbIsolationLevel IsolationLevel
+		{
+			get
+			{
+				// FDB currently only supports Serializable transaction.
+				return FdbIsolationLevel.Serializable;
+			}
+		}
+
 		#endregion
 
 		#region Options...
@@ -177,7 +186,7 @@ namespace FoundationDB.Client.Native
 		{
 			Contract.Requires(keys != null);
 
-			if (keys.Length == 0) return Task.FromResult(new Slice[0]);
+			if (keys.Length == 0) return Task.FromResult(Slice.EmptySliceArray);
 
 			var futures = new FutureHandle[keys.Length];
 			try

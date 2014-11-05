@@ -265,7 +265,7 @@ namespace FoundationDB.Layers.Tuples.Tests
 			}
 
 			// Memoize
-			tmp = t.Memoize().Items;
+			tmp = t.Memoize().ToArray();
 			for (int i = 0; i < tmp.Length; i++)
 			{
 				Assert.That(ComparisonHelper.AreSimilar(tmp[i], expected[i]), Is.True, "{0}: Memoize.Items[{1}], {2} ~= {3}", message, i, tmp[i], expected[i]);
@@ -474,6 +474,10 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_Fdb_Tuple_Serialize_Bytes()
 		{
+			// Byte arrays are stored with prefix '01' followed by the bytes, and terminated by '00'. All occurences of '00' in the byte array are escaped with '00 FF'
+			// - Best case:  packed_size = 2 + array_len
+			// - Worst case: packed_size = 2 + array_len * 2
+
 			Slice packed;
 
 			packed = FdbTuple.Pack(new byte[] { 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0 });
@@ -517,7 +521,7 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Serialize_Unicode_Strings()
 		{
-			// Unicode strings are stored with prefix '02' followed by the utf8 bytes, and terminated by '00'. All occurence of '00' in the UTF8 bytes are escaped with '00 FF'
+			// Unicode strings are stored with prefix '02' followed by the utf8 bytes, and terminated by '00'. All occurences of '00' in the UTF8 bytes are escaped with '00 FF'
 
 			Slice packed;
 
@@ -569,7 +573,7 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Serialize_Guids()
 		{
-			// Guids are stored with prefix '03' followed by 16 bytes formatted according to RFC 4122
+			// 128-bit Guids are stored with prefix '30' followed by 16 bytes formatted according to RFC 4122
 
 			// System.Guid are stored in Little-Endian, but RFC 4122's UUIDs are stored in Big Endian, so per convention we will swap them
 
@@ -587,7 +591,7 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Deserialize_Guids()
 		{
-			// Guids are stored with prefix '03' followed by 16 bytes
+			// 128-bit Guids are stored with prefix '30' followed by 16 bytes
 			// we also accept byte arrays (prefix '01') if they are of length 16
 
 			IFdbTuple packed;
@@ -613,45 +617,103 @@ namespace FoundationDB.Layers.Tuples.Tests
 		}
 
 		[Test]
-		public void Test_FdbTuple_Serialize_Uuids()
+		public void Test_FdbTuple_Serialize_Uuid128s()
 		{
-			// UUIDs are stored with prefix '03' followed by 16 bytes formatted according to RFC 4122
+			// UUID128s are stored with prefix '30' followed by 16 bytes formatted according to RFC 4122
 
 			Slice packed;
 
 			// note: new Uuid(bytes from 0 to 15) => "03020100-0504-0706-0809-0a0b0c0d0e0f";
-			packed = FdbTuple.Create(Uuid.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")).ToSlice();
+			packed = FdbTuple.Create(Uuid128.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")).ToSlice();
 			Assert.That(packed.ToString(), Is.EqualTo("0<00><01><02><03><04><05><06><07><08><09><0A><0B><0C><0D><0E><0F>"));
 
-			packed = FdbTuple.Create(Uuid.Empty).ToSlice();
+			packed = FdbTuple.Create(Uuid128.Empty).ToSlice();
 			Assert.That(packed.ToString(), Is.EqualTo("0<00><00><00><00><00><00><00><00><00><00><00><00><00><00><00><00>"));
 		}
 
 		[Test]
-		public void Test_FdbTuple_Deserialize_Uuids()
+		public void Test_FdbTuple_Deserialize_Uuid128s()
 		{
-			// UUIDs are stored with prefix '03' followed by 16 bytes (the result of uuid.ToByteArray())
+			// UUID128s are stored with prefix '30' followed by 16 bytes (the result of uuid.ToByteArray())
 			// we also accept byte arrays (prefix '01') if they are of length 16
 
 			IFdbTuple packed;
 
 			// note: new Uuid(bytes from 0 to 15) => "00010203-0405-0607-0809-0a0b0c0d0e0f";
 			packed = FdbTuple.Unpack(Slice.Unescape("<30><00><01><02><03><04><05><06><07><08><09><0A><0B><0C><0D><0E><0F>"));
-			Assert.That(packed.Get<Uuid>(0), Is.EqualTo(Uuid.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")));
-			Assert.That(packed[0], Is.EqualTo(Uuid.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")));
+			Assert.That(packed.Get<Uuid128>(0), Is.EqualTo(Uuid128.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")));
+			Assert.That(packed[0], Is.EqualTo(Uuid128.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")));
 
 			packed = FdbTuple.Unpack(Slice.Unescape("<30><00><00><00><00><00><00><00><00><00><00><00><00><00><00><00><00>"));
-			Assert.That(packed.Get<Uuid>(0), Is.EqualTo(Uuid.Empty));
-			Assert.That(packed[0], Is.EqualTo(Uuid.Empty));
+			Assert.That(packed.Get<Uuid128>(0), Is.EqualTo(Uuid128.Empty));
+			Assert.That(packed[0], Is.EqualTo(Uuid128.Empty));
 
 			// unicode string
 			packed = FdbTuple.Unpack(Slice.Unescape("<02>00010203-0405-0607-0809-0a0b0c0d0e0f<00>"));
-			Assert.That(packed.Get<Uuid>(0), Is.EqualTo(Uuid.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")));
+			Assert.That(packed.Get<Uuid128>(0), Is.EqualTo(Uuid128.Parse("00010203-0405-0607-0809-0a0b0c0d0e0f")));
 			//note: t[0] returns a string, not a UUID
 
 			// null maps to Uuid.Empty
 			packed = FdbTuple.Unpack(Slice.Unescape("<00>"));
-			Assert.That(packed.Get<Uuid>(0), Is.EqualTo(Uuid.Empty));
+			Assert.That(packed.Get<Uuid128>(0), Is.EqualTo(Uuid128.Empty));
+			//note: t[0] returns null, not a UUID
+
+		}
+
+		[Test]
+		public void Test_FdbTuple_Serialize_Uuid64s()
+		{
+			// UUID64s are stored with prefix '31' followed by 8 bytes formatted according to RFC 4122
+
+			Slice packed;
+
+			// note: new Uuid(bytes from 0 to 7) => "00010203-04050607";
+			packed = FdbTuple.Create(Uuid64.Parse("00010203-04050607")).ToSlice();
+			Assert.That(packed.ToString(), Is.EqualTo("1<00><01><02><03><04><05><06><07>"));
+
+			packed = FdbTuple.Create(Uuid64.Parse("01234567-89ABCDEF")).ToSlice();
+			Assert.That(packed.ToString(), Is.EqualTo("1<01>#Eg<89><AB><CD><EF>"));
+
+			packed = FdbTuple.Create(Uuid64.Empty).ToSlice();
+			Assert.That(packed.ToString(), Is.EqualTo("1<00><00><00><00><00><00><00><00>"));
+
+			packed = FdbTuple.Create(new Uuid64(0xBADC0FFEE0DDF00DUL)).ToSlice();
+			Assert.That(packed.ToString(), Is.EqualTo("1<BA><DC><0F><FE><E0><DD><F0><0D>"));
+
+			packed = FdbTuple.Create(new Uuid64(0xDEADBEEFL)).ToSlice();
+			Assert.That(packed.ToString(), Is.EqualTo("1<00><00><00><00><DE><AD><BE><EF>"));
+		}
+
+		[Test]
+		public void Test_FdbTuple_Deserialize_Uuid64s()
+		{
+			// UUID64s are stored with prefix '31' followed by 8 bytes (the result of uuid.ToByteArray())
+			// we also accept byte arrays (prefix '01') if they are of length 8, and unicode strings (prefix '02')
+
+			IFdbTuple packed;
+
+			// note: new Uuid(bytes from 0 to 15) => "00010203-0405-0607-0809-0a0b0c0d0e0f";
+			packed = FdbTuple.Unpack(Slice.Unescape("<31><01><23><45><67><89><AB><CD><EF>"));
+			Assert.That(packed.Get<Uuid64>(0), Is.EqualTo(Uuid64.Parse("01234567-89abcdef")));
+			Assert.That(packed[0], Is.EqualTo(Uuid64.Parse("01234567-89abcdef")));
+
+			packed = FdbTuple.Unpack(Slice.Unescape("<31><00><00><00><00><00><00><00><00>"));
+			Assert.That(packed.Get<Uuid64>(0), Is.EqualTo(Uuid64.Empty));
+			Assert.That(packed[0], Is.EqualTo(Uuid64.Empty));
+
+			// 8 bytes
+			packed = FdbTuple.Unpack(Slice.Unescape("<01><01><23><45><67><89><ab><cd><ef><00>"));
+			Assert.That(packed.Get<Uuid64>(0), Is.EqualTo(Uuid64.Parse("01234567-89abcdef")));
+			//note: t[0] returns a string, not a UUID
+
+			// unicode string
+			packed = FdbTuple.Unpack(Slice.Unescape("<02>01234567-89abcdef<00>"));
+			Assert.That(packed.Get<Uuid64>(0), Is.EqualTo(Uuid64.Parse("01234567-89abcdef")));
+			//note: t[0] returns a string, not a UUID
+
+			// null maps to Uuid.Empty
+			packed = FdbTuple.Unpack(Slice.Unescape("<00>"));
+			Assert.That(packed.Get<Uuid64>(0), Is.EqualTo(Uuid64.Empty));
 			//note: t[0] returns null, not a UUID
 
 		}
@@ -659,6 +721,15 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Serialize_Integers()
 		{
+			// Positive integers are stored with a variable-length encoding.
+			// - The prefix is 0x14 + the minimum number of bytes to encode the integer, from 0 to 8, so valid prefixes range from 0x14 to 0x1C
+			// - The bytes are stored in High-Endian (ie: the upper bits first)
+			// Examples:
+			// - 0 => <14>
+			// - 1..255 => <15><##>
+			// - 256..65535 .. => <16><HH><LL>
+			// - ulong.MaxValue => <1C><FF><FF><FF><FF><FF><FF><FF><FF>
+
 			Assert.That(
 				FdbTuple.Create(0).ToSlice().ToString(),
 				Is.EqualTo("<14>")
@@ -752,6 +823,14 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Serialize_Negative_Integers()
 		{
+			// Negative integers are stored with a variable-length encoding.
+			// - The prefix is 0x14 - the minimum number of bytes to encode the integer, from 0 to 8, so valid prefixes range from 0x0C to 0x13
+			// - The value is encoded as the one's complement, and stored in High-Endian (ie: the upper bits first)
+			// - There is no way to encode '-0', it will be encoded as '0' (<14>)
+			// Examples:
+			// - -255..-1 => <13><00> .. <13><FE>
+			// - -65535..-256 => <12><00>00> .. <12><FE><FF>
+			// - long.MinValue => <0C><7F><FF><FF><FF><FF><FF><FF><FF>
 
 			Assert.That(
 				FdbTuple.Create(-1).ToSlice().ToString(),
@@ -795,44 +874,24 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Serialize_Singles()
 		{
-			Assert.That(
-				FdbTuple.Create(0f).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 80 00 00 00")
-			);
+			// 32-bit floats are stored in 5 bytes, using the prefix 0x20 followed by the High-Endian representation of their normalized form
 
-			Assert.That(
-				FdbTuple.Create(42f).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 C2 28 00 00")
-			);
+			Assert.That(FdbTuple.Create(0f).ToSlice().ToHexaString(' '), Is.EqualTo("20 80 00 00 00"));
+			Assert.That(FdbTuple.Create(42f).ToSlice().ToHexaString(' '), Is.EqualTo("20 C2 28 00 00"));
+			Assert.That(FdbTuple.Create(-42f).ToSlice().ToHexaString(' '), Is.EqualTo("20 3D D7 FF FF"));
 
-			Assert.That(
-				FdbTuple.Create(-42f).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 3D D7 FF FF")
-			);
+			Assert.That(FdbTuple.Create((float)Math.Sqrt(2)).ToSlice().ToHexaString(' '), Is.EqualTo("20 BF B5 04 F3"));
 
-			// minus zero
-			Assert.That(
-				FdbTuple.Create(-0f).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 7F FF FF FF")
-			);
-
-			// -INF
-			Assert.That(
-				FdbTuple.Create(float.NegativeInfinity).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 00 7F FF FF")
-			);
-
-			// +INF
-			Assert.That(
-				FdbTuple.Create(float.PositiveInfinity).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 FF 80 00 00")
-			);
+			Assert.That(FdbTuple.Create(float.MinValue).ToSlice().ToHexaString(' '), Is.EqualTo("20 00 80 00 00"), "float.MinValue");
+			Assert.That(FdbTuple.Create(float.MaxValue).ToSlice().ToHexaString(' '), Is.EqualTo("20 FF 7F FF FF"), "float.MaxValue");
+			Assert.That(FdbTuple.Create(-0f).ToSlice().ToHexaString(' '), Is.EqualTo("20 7F FF FF FF"), "-0f");
+			Assert.That(FdbTuple.Create(float.NegativeInfinity).ToSlice().ToHexaString(' '), Is.EqualTo("20 00 7F FF FF"), "float.NegativeInfinity");
+			Assert.That(FdbTuple.Create(float.PositiveInfinity).ToSlice().ToHexaString(' '), Is.EqualTo("20 FF 80 00 00"), "float.PositiveInfinity");
+			Assert.That(FdbTuple.Create(float.Epsilon).ToSlice().ToHexaString(' '), Is.EqualTo("20 80 00 00 01"), "+float.Epsilon");
+			Assert.That(FdbTuple.Create(-float.Epsilon).ToSlice().ToHexaString(' '), Is.EqualTo("20 7F FF FF FE"), "-float.Epsilon");
 
 			// all possible variants of NaN should all be equal
-			Assert.That(
-				FdbTuple.Create(float.NaN).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 00 3F FF FF")
-			);
+			Assert.That(FdbTuple.Create(float.NaN).ToSlice().ToHexaString(' '), Is.EqualTo("20 00 3F FF FF"), "float.NaN");
 
 			// cook up a non standard NaN (with some bits set in the fraction)
 			float f = float.NaN; // defined as 1f / 0f
@@ -843,65 +902,60 @@ namespace FoundationDB.Layers.Tuples.Tests
 			Assert.That(float.IsNaN(f), Is.True);
 			Assert.That(
 				FdbTuple.Create(f).ToSlice().ToHexaString(' '),
-				Is.EqualTo("20 00 3F FF FF")
+				Is.EqualTo("20 00 3F FF FF"),
+				"All variants of NaN must be normalized"
 				//note: if we have 20 00 3F FF 84, that means that the NaN was not normalized
 			);
 
 		}
 
 		[Test]
+		public void Test_FdbTuple_Deserialize_Singles()
+		{
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 80 00 00 00")), Is.EqualTo(0f), "0f");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 C2 28 00 00")), Is.EqualTo(42f), "42f");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 3D D7 FF FF")), Is.EqualTo(-42f), "-42f");
+
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 BF B5 04 F3")), Is.EqualTo((float)Math.Sqrt(2)), "Sqrt(2)");
+
+			// well known values
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 00 80 00 00")), Is.EqualTo(float.MinValue), "float.MinValue");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 FF 7F FF FF")), Is.EqualTo(float.MaxValue), "float.MaxValue");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 7F FF FF FF")), Is.EqualTo(-0f), "-0f");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 00 7F FF FF")), Is.EqualTo(float.NegativeInfinity), "float.NegativeInfinity");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 FF 80 00 00")), Is.EqualTo(float.PositiveInfinity), "float.PositiveInfinity");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 00 80 00 00")), Is.EqualTo(float.MinValue), "float.Epsilon");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 80 00 00 01")), Is.EqualTo(float.Epsilon), "+float.Epsilon");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 7F FF FF FE")), Is.EqualTo(-float.Epsilon), "-float.Epsilon");
+
+			// all possible variants of NaN should end up equal and normalized to float.NaN
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 00 3F FF FF")), Is.EqualTo(float.NaN), "float.NaN");
+			Assert.That(FdbTuple.UnpackSingle<float>(Slice.FromHexa("20 00 3F FF FF")), Is.EqualTo(float.NaN), "float.NaN");
+		}
+
+		[Test]
 		public void Test_FdbTuple_Serialize_Doubles()
 		{
-			Assert.That(
-				FdbTuple.Create(0d).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 80 00 00 00 00 00 00 00")
-			);
+			// 64-bit floats are stored in 9 bytes, using the prefix 0x21 followed by the High-Endian representation of their normalized form
 
-			Assert.That(
-				FdbTuple.Create(42d).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 C0 45 00 00 00 00 00 00")
-			);
+			Assert.That(FdbTuple.Create(0d).ToSlice().ToHexaString(' '), Is.EqualTo("21 80 00 00 00 00 00 00 00"));
+			Assert.That(FdbTuple.Create(42d).ToSlice().ToHexaString(' '), Is.EqualTo("21 C0 45 00 00 00 00 00 00"));
+			Assert.That(FdbTuple.Create(-42d).ToSlice().ToHexaString(' '), Is.EqualTo("21 3F BA FF FF FF FF FF FF"));
 
-			Assert.That(
-				FdbTuple.Create(-42d).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 3F BA FF FF FF FF FF FF")
-			);
+			Assert.That(FdbTuple.Create(Math.PI).ToSlice().ToHexaString(' '), Is.EqualTo("21 C0 09 21 FB 54 44 2D 18"));
+			Assert.That(FdbTuple.Create(Math.E).ToSlice().ToHexaString(' '), Is.EqualTo("21 C0 05 BF 0A 8B 14 57 69"));
 
-			// Min
-			Assert.That(
-				FdbTuple.Create(double.MinValue).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 00 10 00 00 00 00 00 00")
-			);
-
-			// Max
-			Assert.That(
-				FdbTuple.Create(double.MaxValue).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 FF EF FF FF FF FF FF FF")
-			);
-
-			// minus zero
-			Assert.That(
-				FdbTuple.Create(-0d).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 7F FF FF FF FF FF FF FF")
-			);
-
-			// -INF
-			Assert.That(
-				FdbTuple.Create(double.NegativeInfinity).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 00 0F FF FF FF FF FF FF")
-			);
-
-			// +INF
-			Assert.That(
-				FdbTuple.Create(double.PositiveInfinity).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 FF F0 00 00 00 00 00 00")
-			);
+			Assert.That(FdbTuple.Create(double.MinValue).ToSlice().ToHexaString(' '), Is.EqualTo("21 00 10 00 00 00 00 00 00"), "double.MinValue");
+			Assert.That(FdbTuple.Create(double.MaxValue).ToSlice().ToHexaString(' '), Is.EqualTo("21 FF EF FF FF FF FF FF FF"), "double.MaxValue");
+			Assert.That(FdbTuple.Create(-0d).ToSlice().ToHexaString(' '), Is.EqualTo("21 7F FF FF FF FF FF FF FF"), "-0d");
+			Assert.That(FdbTuple.Create(double.NegativeInfinity).ToSlice().ToHexaString(' '), Is.EqualTo("21 00 0F FF FF FF FF FF FF"), "double.NegativeInfinity");
+			Assert.That(FdbTuple.Create(double.PositiveInfinity).ToSlice().ToHexaString(' '), Is.EqualTo("21 FF F0 00 00 00 00 00 00"), "double.PositiveInfinity");
+			Assert.That(FdbTuple.Create(double.Epsilon).ToSlice().ToHexaString(' '), Is.EqualTo("21 80 00 00 00 00 00 00 01"), "+double.Epsilon");
+			Assert.That(FdbTuple.Create(-double.Epsilon).ToSlice().ToHexaString(' '), Is.EqualTo("21 7F FF FF FF FF FF FF FE"), "-double.Epsilon");
 
 			// all possible variants of NaN should all be equal
-			Assert.That(
-				FdbTuple.Create(double.NaN).ToSlice().ToHexaString(' '),
-				Is.EqualTo("21 00 07 FF FF FF FF FF FF")
-			);
+
+			Assert.That(FdbTuple.Create(double.NaN).ToSlice().ToHexaString(' '), Is.EqualTo("21 00 07 FF FF FF FF FF FF"), "double.NaN");
 
 			// cook up a non standard NaN (with some bits set in the fraction)
 			double d = double.NaN; // defined as 1d / 0d
@@ -915,12 +969,41 @@ namespace FoundationDB.Layers.Tuples.Tests
 				Is.EqualTo("21 00 07 FF FF FF FF FF FF")
 				//note: if we have 21 00 07 FF FF FF FF FF 84, that means that the NaN was not normalized
 			);
+
+			// roundtripping vectors of doubles
+			var tuple = FdbTuple.Create(Math.PI, Math.E, Math.Log(1), Math.Log(2));
+			Assert.That(FdbTuple.Unpack(FdbTuple.Pack(Math.PI, Math.E, Math.Log(1), Math.Log(2))), Is.EqualTo(tuple));
+			Assert.That(FdbTuple.Unpack(FdbTuple.Create(Math.PI, Math.E, Math.Log(1), Math.Log(2)).ToSlice()), Is.EqualTo(tuple));
+			Assert.That(FdbTuple.Unpack(FdbTuple.Empty.Append(Math.PI).Append(Math.E).Append(Math.Log(1)).Append(Math.Log(2)).ToSlice()), Is.EqualTo(tuple));
+		}
+
+		[Test]
+		public void Test_FdbTuple_Deserialize_Doubles()
+		{
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 80 00 00 00 00 00 00 00")), Is.EqualTo(0d), "0d");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 C0 45 00 00 00 00 00 00")), Is.EqualTo(42d), "42d");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 3F BA FF FF FF FF FF FF")), Is.EqualTo(-42d), "-42d");
+
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 C0 09 21 FB 54 44 2D 18")), Is.EqualTo(Math.PI), "Math.PI");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 C0 05 BF 0A 8B 14 57 69")), Is.EqualTo(Math.E), "Math.E");
+
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 00 10 00 00 00 00 00 00")), Is.EqualTo(double.MinValue), "double.MinValue");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 FF EF FF FF FF FF FF FF")), Is.EqualTo(double.MaxValue), "double.MaxValue");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 7F FF FF FF FF FF FF FF")), Is.EqualTo(-0d), "-0d");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 00 0F FF FF FF FF FF FF")), Is.EqualTo(double.NegativeInfinity), "double.NegativeInfinity");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 FF F0 00 00 00 00 00 00")), Is.EqualTo(double.PositiveInfinity), "double.PositiveInfinity");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 80 00 00 00 00 00 00 01")), Is.EqualTo(double.Epsilon), "+double.Epsilon");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 7F FF FF FF FF FF FF FE")), Is.EqualTo(-double.Epsilon), "-double.Epsilon");
+
+			// all possible variants of NaN should end up equal and normalized to double.NaN
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 00 07 FF FF FF FF FF FF")), Is.EqualTo(double.NaN), "double.NaN");
+			Assert.That(FdbTuple.UnpackSingle<double>(Slice.FromHexa("21 00 07 FF FF FF FF FF 84")), Is.EqualTo(double.NaN), "double.NaN");
 		}
 
 		[Test]
 		public void Test_FdbTuple_Serialize_Booleans()
 		{
-			// False is 0, True is 1
+			// Booleans are stored as interger 0 (<14>) for false, and integer 1 (<15><01>) for true
 
 			Slice packed;
 
@@ -975,7 +1058,9 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_Serialize_IPAddress()
 		{
-		
+			// IP Addresses are stored as a byte array (<01>..<00>), in network order (big-endian)
+			// They will take from 6 to 10 bytes, depending on the number of '.0' in them.
+
 			Assert.That(
 				FdbTuple.Create(IPAddress.Loopback).ToSlice().ToHexaString(' '),
 				Is.EqualTo("01 7F 00 FF 00 FF 01 00")
@@ -1012,6 +1097,7 @@ namespace FoundationDB.Layers.Tuples.Tests
 		[Test]
 		public void Test_FdbTuple_NullableTypes()
 		{
+			// Nullable types will either be encoded as <14> for null, or their regular encoding if not null
 
 			// serialize
 
@@ -2049,7 +2135,8 @@ namespace FoundationDB.Layers.Tuples.Tests
 			var tuples = new List<IFdbTuple>(N);
 			var rnd = new Random(777);
 			var guids = Enumerable.Range(0, 10).Select(_ => Guid.NewGuid()).ToArray();
-			var uuids = Enumerable.Range(0, 10).Select(_ => Uuid.NewUuid()).ToArray();
+			var uuid128s = Enumerable.Range(0, 10).Select(_ => Uuid128.NewUuid()).ToArray();
+			var uuid64s = Enumerable.Range(0, 10).Select(_ => Uuid64.NewUuid()).ToArray();
 			var fuzz = new byte[1024 + 1000]; rnd.NextBytes(fuzz);
 			var sw = Stopwatch.StartNew();
 			for (int i = 0; i < N; i++)
@@ -2059,7 +2146,7 @@ namespace FoundationDB.Layers.Tuples.Tests
 				if (i % (N / 100) == 0) Console.Write(".");
 				for (int j = 0; j < s; j++)
 				{
-					switch (rnd.Next(16))
+					switch (rnd.Next(17))
 					{
 						case 0: tuple = tuple.Append<int>(rnd.Next(255)); break;
 						case 1: tuple = tuple.Append<int>(-1 - rnd.Next(255)); break;
@@ -2072,11 +2159,12 @@ namespace FoundationDB.Layers.Tuples.Tests
 						case 8: tuple = tuple.Append<string>(FUNKY_STRING); break;
 						case 9: tuple = tuple.Append<Slice>(FUNKY_ASCII); break;
 						case 10: tuple = tuple.Append<Guid>(guids[rnd.Next(10)]); break;
-						case 11: tuple = tuple.Append<Uuid>(uuids[rnd.Next(10)]); break;
-						case 12: tuple = tuple.Append<Slice>(Slice.Create(fuzz, rnd.Next(1000), 1 + (int)Math.Sqrt(rnd.Next(1024)))); break;
-						case 13: tuple = tuple.Append(default(string)); break;
-						case 14: tuple = tuple.Append<object>("hello"); break;
-						case 15: tuple = tuple.Append<bool>(rnd.Next(2) == 0); break;
+						case 11: tuple = tuple.Append<Uuid128>(uuid128s[rnd.Next(10)]); break;
+						case 12: tuple = tuple.Append<Uuid64>(uuid64s[rnd.Next(10)]); break;
+						case 13: tuple = tuple.Append<Slice>(Slice.Create(fuzz, rnd.Next(1000), 1 + (int)Math.Sqrt(rnd.Next(1024)))); break;
+						case 14: tuple = tuple.Append(default(string)); break;
+						case 15: tuple = tuple.Append<object>("hello"); break;
+						case 16: tuple = tuple.Append<bool>(rnd.Next(2) == 0); break;
 					}
 				}
 				tuples.Add(tuple);

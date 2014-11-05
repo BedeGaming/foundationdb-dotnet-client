@@ -131,9 +131,10 @@ namespace FoundationDB.Client
 			[Pure]
 			get
 			{
-				Contract.Assert(this.Buffer != null && this.Position >= 0 && index < this.Position && -index <= this.Position);
+				Contract.Assert(this.Buffer != null && this.Position >= 0);
 				//note: we will get bound checking for free in release builds
 				if (index < 0) index += this.Position;
+				if (index < 0 || index >= this.Position) throw new IndexOutOfRangeException();
 				return this.Buffer[index];
 			}
 		}
@@ -273,6 +274,7 @@ namespace FoundationDB.Client
 			}
 			else
 			{
+				//REVIEW: should we throw if there are less bytes in the buffer than we want to flush ?
 				this.Position = 0;
 				return 0;
 			}
@@ -556,6 +558,8 @@ namespace FoundationDB.Client
 			this.Position += count;
 		}
 
+		#region Fixed, Little-Endian
+
 		/// <summary>Writes a 16-bit unsigned integer, using little-endian encoding</summary>
 		/// <remarks>Advances the cursor by 2 bytes</remarks>
 		public void WriteFixed16(uint value)
@@ -599,6 +603,58 @@ namespace FoundationDB.Client
 			buffer[p + 7] = (byte)(value >> 56);
 			this.Position = p + 8;
 		}
+
+		#endregion
+
+		#region Fixed, Big-Endian
+
+		/// <summary>Writes a 16-bit unsigned integer, using big-endian encoding</summary>
+		/// <remarks>Advances the cursor by 2 bytes</remarks>
+		public void WriteFixed16BE(uint value)
+		{
+			EnsureBytes(2);
+			var buffer = this.Buffer;
+			int p = this.Position;
+			buffer[p] = (byte)(value >> 8);
+			buffer[p + 1] = (byte)value;
+			this.Position = p + 2;
+		}
+
+		/// <summary>Writes a 32-bit unsigned integer, using big-endian encoding</summary>
+		/// <remarks>Advances the cursor by 4 bytes</remarks>
+		public void WriteFixed32BE(uint value)
+		{
+			EnsureBytes(4);
+			var buffer = this.Buffer;
+			int p = this.Position;
+			buffer[p] = (byte)(value >> 24);
+			buffer[p + 1] = (byte)(value >> 16);
+			buffer[p + 2] = (byte)(value >> 8);
+			buffer[p + 3] = (byte)(value);
+			this.Position = p + 4;
+		}
+
+		/// <summary>Writes a 64-bit unsigned integer, using big-endian encoding</summary>
+		/// <remarks>Advances the cursor by 8 bytes</remarks>
+		public void WriteFixed64BE(ulong value)
+		{
+			EnsureBytes(8);
+			var buffer = this.Buffer;
+			int p = this.Position;
+			buffer[p] = (byte)(value >> 56);
+			buffer[p + 1] = (byte)(value >> 48);
+			buffer[p + 2] = (byte)(value >> 40);
+			buffer[p + 3] = (byte)(value >> 32);
+			buffer[p + 4] = (byte)(value >> 24);
+			buffer[p + 5] = (byte)(value >> 16);
+			buffer[p + 6] = (byte)(value >> 8);
+			buffer[p + 7] = (byte)(value);
+			this.Position = p + 8;
+		}
+
+		#endregion
+
+		#region Variable size
 
 		/// <summary>Writes a 7-bit encoded unsigned int (aka 'Varint16') at the end, and advances the cursor</summary>
 		public void WriteVarint16(ushort value)
@@ -694,6 +750,8 @@ namespace FoundationDB.Client
 		/// <summary>Writes a length-prefixed byte array, and advances the cursor</summary>
 		public void WriteVarbytes(Slice value)
 		{
+			//REVIEW: what should we do for Slice.Nil ?
+
 			SliceHelpers.EnsureSliceIsValid(ref value);
 			int n = value.Count;
 			if (n < 128)
@@ -704,7 +762,10 @@ namespace FoundationDB.Client
 				// write the count (single byte)
 				buffer[p] = (byte)n;
 				// write the bytes
-				SliceHelpers.CopyBytesUnsafe(buffer, p + 1, value.Array, value.Offset, n);
+				if (n > 0)
+				{
+					SliceHelpers.CopyBytesUnsafe(buffer, p + 1, value.Array, value.Offset, n);
+				}
 				this.Position = p + n + 1;
 			}
 			else
@@ -716,6 +777,8 @@ namespace FoundationDB.Client
 				this.Position += n;
 			}
 		}
+
+		#endregion
 
 		/// <summary>Ensures that we can fit a specific amount of data at the end of the buffer</summary>
 		/// <param name="count">Number of bytes that will be written</param>
