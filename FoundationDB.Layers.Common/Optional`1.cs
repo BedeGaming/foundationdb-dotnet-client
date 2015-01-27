@@ -105,9 +105,7 @@ namespace FoundationDB.Layers
 		public static Nullable<T> ToNullable<T>(this Optional<T> value)
 			where T : struct
 		{
-			if(!value.HasValue)
-				return default(Nullable<T>);
-			return new Nullable<T>(value.Value);
+			return !value.HasValue ? default(Nullable<T>) : value.Value;
 		}
 
 		#endregion
@@ -141,7 +139,7 @@ namespace FoundationDB.Layers
 			var tmp = new Nullable<T>[values.Length];
 			for (int i = 0; i < values.Length; i++)
 			{
-				if (values[i].HasValue) tmp[i] = new Nullable<T>(values[i].Value);
+				if (values[i].HasValue) tmp[i] = values[i].Value;
 			}
 			return tmp;
 		}
@@ -186,7 +184,7 @@ namespace FoundationDB.Layers
 		{
 			if (source == null) throw new ArgumentNullException("source");
 
-			return source.Select(value => value.HasValue ? new Nullable<T>(value.Value) : default(Nullable<T>));
+			return source.Select(value => !value.HasValue ? default(Nullable<T>) : value.Value);
 		}
 
 		/// <summary>Transforms a squence of <see cref="Optional{T}"/> into a sequence of values</summary>
@@ -216,9 +214,9 @@ namespace FoundationDB.Layers
 			if (data == null) throw new ArgumentNullException("data");
 
 			var values = new Optional<T>[data.Length];
-			Slice item;
 			for (int i = 0; i < data.Length; i++)
 			{
+				Slice item;
 				if ((item = data[i]).HasValue)
 				{
 					values[i] = new Optional<T>(decoder.DecodeValue(item));
@@ -252,6 +250,8 @@ namespace FoundationDB.Layers
 		// This is the equivalent of Nullable<T> that would accept reference types.
 		// The main difference is that, 'null' is a legal value for reference types, which is distinct from "no value"
 		// i.e.: new Optional<string>(null).HasValue == true
+
+		//REVIEW: this looks very similar to Maybe<T>, except without the handling of errors. Maybe we could merge both?
 
 		private readonly bool m_hasValue;
 
@@ -301,12 +301,12 @@ namespace FoundationDB.Layers
 
 		public bool Equals(Optional<T> value)
 		{
-			return m_hasValue == value.m_hasValue && object.Equals(m_value, value.m_value);
+			return m_hasValue == value.m_hasValue && EqualityComparer<T>.Default.Equals(m_value, value.m_value);
 		}
 
 		public bool Equals(T value)
 		{
-			return m_hasValue && object.Equals(m_value, value);
+			return m_hasValue && EqualityComparer<T>.Default.Equals(m_value, value);
 		}
 
 		public override int GetHashCode()
@@ -318,8 +318,9 @@ namespace FoundationDB.Layers
 		/// <summary>Indicates whether the current <see cref="Optional{T}"/> object is equal to a specified object.</summary>
 		public override bool Equals(object obj)
 		{
-			if (!m_hasValue) return obj == null;
-			return object.Equals(m_value, obj);
+			if (obj is T) return Equals((T)obj);
+			if (obj is Optional<T>) return Equals((Optional<T>)obj);
+			return m_hasValue ? object.Equals(m_value, obj) : object.ReferenceEquals(obj, null);
 		}
 
 		public static bool operator ==(Optional<T> a, Optional<T> b)
@@ -363,7 +364,7 @@ namespace FoundationDB.Layers
 			// Needed to be able to write stuff like "if (optional != null)", the compiler will automatically lift "foo != null" to nullables if foo is a struct implements the '!=' operator
 			return !a.GetValueOrDefault().Equals(b.GetValueOrDefault());
 		}
-		
+
 		public static explicit operator T(Optional<T> value)
 		{
 			return value.Value;

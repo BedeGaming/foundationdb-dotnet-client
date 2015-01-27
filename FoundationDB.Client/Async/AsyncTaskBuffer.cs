@@ -154,6 +154,21 @@ namespace FoundationDB.Async
 			}
 		}
 
+#if NET_4_0
+		public override void OnError(Exception error)
+		{
+			lock (m_lock)
+			{
+				if (!m_done)
+				{
+					LogProducer("Error received: " + error.Message);
+					m_queue.AddLast(new LinkedListNode<Task<T>>(TaskHelpers.FromException<T>(error)));
+					WakeUpBlockedConsumer_NeedsLocking();
+					if (m_mode == AsyncOrderingMode.CompletionOrder) NotifyConsumerOfTaskCompletion_NeedsLocking();
+				}
+			}
+		}
+#else
 		public override void OnError(ExceptionDispatchInfo error)
 		{
 			lock (m_lock)
@@ -167,6 +182,7 @@ namespace FoundationDB.Async
 				}
 			}
 		}
+#endif
 
 		private void Enqueue_NeedsLocking(Task<T> task)
 		{
@@ -176,6 +192,8 @@ namespace FoundationDB.Async
 
 		private async Task WaitForNextFreeSlotThenEnqueueAsync(Task<T> task, [NotNull] Task wait, CancellationToken ct)
 		{
+			ct.ThrowIfCancellationRequested();
+
 			await wait.ConfigureAwait(false);
 
 			LogProducer("Wake up because one slot got freed");
@@ -296,7 +314,11 @@ namespace FoundationDB.Async
 			catch(Exception e)
 			{
 				LogConsumer("Notified that task #" + task + " failed");
+#if NET_4_0
 				return Maybe.Error<T>(e);
+#else
+				return Maybe.Error<T>(ExceptionDispatchInfo.Capture(e));
+#endif
 			}
 		}
 

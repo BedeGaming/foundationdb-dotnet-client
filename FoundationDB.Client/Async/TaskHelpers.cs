@@ -348,6 +348,11 @@ namespace FoundationDB.Async
 			return tcs.Task;
 		}
 
+		/// <summary>Returns a failed Task that wraps an exception</summary>
+		/// <typeparam name="T">Type of the result of the task</typeparam>
+		/// <param name="e">Exception that will be wrapped in the task</param>
+		/// <param name="cancellationToken">Original cancellation token that may have triggered</param>
+		/// <returns>Task that is already completed, and that will rethrow the exception once observed</returns>
 		public static Task<T> FromFailure<T>(Exception e, CancellationToken cancellationToken)
 		{
 			if (e is OperationCanceledException)
@@ -361,6 +366,7 @@ namespace FoundationDB.Async
 			return FromException<T>(e);
 		}
 
+		/// <summary>Update the state of a TaskCompletionSource to reflect the type of error that occurred</summary>
 		public static void PropagateException<T>([NotNull] TaskCompletionSource<T> tcs, Exception e)
 		{
 			if (e is OperationCanceledException)
@@ -369,11 +375,28 @@ namespace FoundationDB.Async
 			}
 			else if (e is AggregateException)
 			{
-				tcs.TrySetException((e as AggregateException).Flatten().InnerExceptions);
+				tcs.TrySetException(((AggregateException) e).Flatten().InnerExceptions);
 			}
 			else
 			{
 				tcs.TrySetException(e);
+			}
+		}
+
+		/// <summary>Ensure that a task will be observed by someone, in the event that it would fail</summary>
+		/// <remarks>This helps discard any unhandled task exceptions, for fire&amp;forget tasks</remarks>
+		public static void Observe(Task task)
+		{
+			if (task != null)
+			{
+				if (!task.IsCompleted)
+				{
+					task.ContinueWith((t) => { var _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+				}
+				else
+				{
+					var _ = task.Exception;
+				}
 			}
 		}
 
@@ -384,7 +407,7 @@ namespace FoundationDB.Async
 			if (source != null && !source.IsCancellationRequested)
 			{
 				try
-				{				
+				{
 					source.Cancel();
 				}
 				catch (ObjectDisposedException) { }

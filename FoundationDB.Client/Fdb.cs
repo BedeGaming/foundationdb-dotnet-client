@@ -35,8 +35,8 @@ namespace FoundationDB.Client
 	using JetBrains.Annotations;
 	using System;
 	using System.Diagnostics;
-	using System.IO;
 	using System.Runtime.CompilerServices;
+	using System.Runtime.ExceptionServices;
 	using System.Threading;
 	using System.Threading.Tasks;
 	using SystemIO = System.IO;
@@ -57,7 +57,15 @@ namespace FoundationDB.Client
 		internal const int MaxTransactionWriteSize = 10 * 1024 * 1024;
 
 		/// <summary>Minimum API version supported by this binding</summary>
-		internal const int MinimumApiVersion = 200; // v2.0.x
+		internal const int MinSafeApiVersion = FdbNative.FDB_API_MIN_VERSION;
+
+		/// <summary>Highest API version that this binding can support</summary>
+		/// <remarks>Ex: this binding has been tested against v3.x (300) but the installed client can be v4.x (400).</remarks>
+		internal const int MaxSafeApiVersion = FdbNative.FDB_API_MAX_VERSION;
+
+		/// <summary>Default API version that will be selected, if the application does not specify otherwise.</summary>
+		internal const int DefaultApiVersion = 200; // v2.0.x
+		//INVARIANT: MinSafeApiVersion <= DefaultApiVersion <= MaxSafeApiVersion
 
 		#endregion
 
@@ -67,7 +75,7 @@ namespace FoundationDB.Client
 		private static bool s_started; //REVIEW: replace with state flags (Starting, Started, Failed, ...)
 
 		/// <summary>Currently selected API version</summary>
-		private static int s_apiVersion = FdbNative.FDB_API_VERSION;
+		private static int s_apiVersion = DefaultApiVersion;
 
 		/// <summary>Event handler called when the AppDomain gets unloaded</summary>
 		private static EventHandler s_appDomainUnloadHandler;
@@ -77,49 +85,68 @@ namespace FoundationDB.Client
 
 		#endregion
 
-		/// <summary>Returns the minimum API version currently supported by this binding</summary>
+		/// <summary>Returns the minimum API version currently supported by this binding.</summary>
+		/// <remarks>Attempts to select an API version lower than this value will fail.</remarks>
 		public static int GetMinApiVersion()
 		{
-			return MinimumApiVersion;
+			return MinSafeApiVersion;
 		}
 
-		/// <summary>Returns the maximum API version currently supported by this binding</summary>
+		/// <summary>Returns the maximum API version currently supported by the installed client.</summary>
+		/// <remarks>The version of the installed client (fdb_c.dll) can be different higher (or lower) than the version supported by this binding (FoundationDB.Client.dll)!
+		/// If you want the highest possible version that is supported by both the binding and the client, you must call <see cref="GetMaxSafeApiVersion"/>.
+		/// Attempts to select an API version higher than this value will fail.
+		/// </remarks>
 		public static int GetMaxApiVersion()
 		{
 			return FdbNative.GetMaxApiVersion();
 		}
 
-		/// <summary>Returns the currently selected API version</summary>
+		/// <summary>Returns the maximum API version that is supported by both this binding and the installed client.</summary>
+		/// <returns>Value that can be safely passed to <see cref="UseApiVersion"/> or <see cref="Start(int)"/>, if you want to be on the bleeding edge.</returns>
+		/// <remarks>This value can be lower than the value returned by <see cref="GetMaxApiVersion"/> if the FoundationDB client installed on this machine is more recent that the version of this assembly.
+		/// Using this version may break your application if new features change the behavior of the client (ex: default mode for snapshot transactions between v2.x and v3.x).
+		/// </remarks>
+		public static int GetMaxSafeApiVersion()
+		{
+			return Math.Min(MaxSafeApiVersion, GetMaxApiVersion());
+		}
+
+		/// <summary>Returns the currently selected API version.</summary>
 		/// <remarks>Unless explicitely selected by calling <see cref="UseApiVersion"/> before, the default API version level will be returned</remarks>
 		public static int ApiVersion
 		{
 			get { return s_apiVersion; }
 		}
 
-		/// <summary>Sets the desired API version of the binding</summary>
-		/// <remarks>The version can only be set before calling <see cref="Fdb.Start()"/> or any method that indirectly calls it.</remarks>
+		/// <summary>Sets the desired API version of the binding.
+		/// The selected version level may affect the availability and behavior or certain features.
+		/// </summary>
+		/// <remarks>
+		/// The version can only be set before calling <see cref="Fdb.Start()"/> or any method that indirectly calls it.
+		/// If you want to be on the bleeding edge, you can use <see cref="GetMaxSafeApiVersion"/> to get the maximum version supported by both this bindign and the FoundationDB client.
+		/// If you want to be conservative, you should target a specific version level, and only change to newer versions after making sure that all tests are passing!
+		/// </remarks>
 		/// <exception cref="InvalidOperationException">When attempting to change the API version after the binding has been started.</exception>
 		/// <exception cref="ArgumentException">When attempting to set a negative version, or a version that is either less or greater than the minimum and maximum supported versions.</exception>
 		public static void UseApiVersion(int value)
 		{
-			if (s_started) throw new InvalidOperationException("You cannot change the API Version after Fdb.Start() has been called.");
 			if (value < 0) throw new ArgumentException("API version must be a positive integer.");
+			if (value == 0)
+			{ // 0 means "use the default version"
+				value = DefaultApiVersion;
+			}
+			if (s_apiVersion == value) return; //Alreay set to same version... skip it.
+			if (s_started) throw new InvalidOperationException(string.Format("You cannot set API version {0} because version {1} has already been selected", value, s_apiVersion));
 
 			//note: we don't actually select the version yet, only when Start() is called.
 
-			if (value == 0)
-			{ // 0 means "use the default version"
-				s_apiVersion = FdbNative.FDB_API_VERSION;
-			}
-			else
-			{
-				int min = GetMinApiVersion();
-				if (value < min) throw new ArgumentException(String.Format("The minimum API version supported by this binding is {0} and the default version is {1}.", min, FdbNative.FDB_API_VERSION));
-				int max = GetMaxApiVersion();
-				if (value > max) throw new ArgumentException(String.Format("The maximum API version supported by this binding is {0} and the default version is {1}.", max, FdbNative.FDB_API_VERSION));
+			int min = GetMinApiVersion();
+			if (value < min) throw new ArgumentException(String.Format("The minimum API version supported by this binding is {0} and the default version is {1}.", min, DefaultApiVersion));
+			int max = GetMaxApiVersion();
+			if (value > max) throw new ArgumentException(String.Format("The maximum API version supported by this binding is {0} and the default version is {1}.", max, DefaultApiVersion));
 
-				s_apiVersion = value;
-			}
+			s_apiVersion = value;
 		}
 
 		/// <summary>Returns true if the error code represents a success</summary>
@@ -162,7 +189,7 @@ namespace FoundationDB.Client
 				case FdbError.TimedOut: return new TimeoutException("Operation timed out");
 				case FdbError.LargeAllocFailed: return new OutOfMemoryException("Large block allocation failed");
 				//TODO!
-				default: 
+				default:
 					return new FdbException(code, msg);
 			}
 		}
@@ -186,10 +213,12 @@ namespace FoundationDB.Client
 				s_eventLoopStopRequested = false;
 				s_eventLoopRunning = false;
 
-				var thread = new Thread(EventLoop);
-				thread.Name = "FdbNetworkLoop";
-				thread.IsBackground = true;
-				thread.Priority = ThreadPriority.AboveNormal;
+				var thread = new Thread(EventLoop)
+				{
+					Name = "FdbNetworkLoop",
+					IsBackground = true,
+					Priority = ThreadPriority.AboveNormal
+				};
 				s_eventLoop = thread;
 				try
 				{
@@ -279,8 +308,12 @@ namespace FoundationDB.Client
 		}
 
 		/// <summary>Entry point for the Network Thread</summary>
+		[HandleProcessCorruptedStateExceptions]
 		private static void EventLoop()
 		{
+			//TODO: we need to move the crash handling logic outside this method, so that an app can hook up an event and device what to do: crash or keep running (dangerous!).
+			// At least, the app would get the just to do some emergency shutdown logic before letting the process die....
+
 			try
 			{
 				s_eventLoopRunning = true;
@@ -300,11 +333,11 @@ namespace FoundationDB.Client
 					{ // this was NOT expected !
 						if (Logging.On) Logging.Error(typeof(Fdb), "EventLoop", String.Format("The fdb network thread returned with error code {0}: {1}", err, GetErrorMessage(err)));
 #if DEBUG
-						Console.Error.WriteLine("THE FDB NETWORK EVENT LOOP HAS CRASHED! PLEASE RESTART THE PROCESS!");
+						Console.Error.WriteLine("THE FDB NETWORK EVENT LOOP HAS FAILED!");
 						Console.Error.WriteLine("=> " + err);
 						// REVIEW: should we FailFast in release mode also?
 						// => this may be a bit suprising for most users when applications unexpectedly crash for for no apparent reason.
-						Environment.FailFast("FoundationDB network event loop failed with error " + err);
+						Environment.FailFast("The FoundationDB Network Event Loop failed with error " + err + " and was terminated.");
 #endif
 					}
 				}
@@ -312,11 +345,43 @@ namespace FoundationDB.Client
 			catch (Exception e)
 			{
 				if (e is ThreadAbortException)
-				{ // bye bye
+				{ // some other thread tried to Abort() us. This probably means that we should exit ASAP...
 					Thread.ResetAbort();
 					return;
 				}
-				//TODO: logging ?
+
+				//note: any error is this thread is BAD NEWS for the process, the the network thread usually cannot be restarted safely.
+
+				if (e is AccessViolationException)
+				{
+					// An access violation occured inside the native code. This good be caused by:
+					// - a bug in fdb_c.dll
+					// - a bug in our own marshalling code that calls into fdb_c.dll
+					// - some other random heap corruption that caused us to pass bogus data to fdb_c.dll
+					// - a random cosmic ray that flipped some bits in memory...
+					if (Debugger.IsAttached) Debugger.Break();
+
+					// This error is VERY BAD NEWS, and means that we CANNOT continue safely running fdb in this process
+					// The only reasonable option is to exit the process immediately !
+
+					Console.Error.WriteLine("THE FDB NETWORK EVENT LOOP HAS CRASHED!");
+					Console.Error.WriteLine("=> " + e.ToString());
+					Environment.FailFast("The FoundationDB Network Event Loop crashed with an Access Violation, and had to be terminated. You may try to create full memory dumps, as well as attach a debugger to this process (it will automatically break when this problem occurs).", e);
+					return;
+				}
+
+				if (Logging.On) Logging.Exception(typeof(Fdb), "EventLoop", e);
+
+#if DEBUG
+				// if we are running in DEBUG build, we want to get the attention of the developper on this.
+				// the best way is to make the test runner explode in mid-air with a scary looking message!
+
+				Console.Error.WriteLine("THE FDB NETWORK EVENT LOOP HAS CRASHED!");
+				Console.Error.WriteLine("=> " + e.ToString());
+				// REVIEW: should we FailFast in release mode also?
+				// => this may be a bit suprising for most users when applications unexpectedly crash for for no apparent reason.
+				Environment.FailFast("The FoundationDB Network Event Loop crashed and had to be terminated: " + e.Message, e);
+#endif
 			}
 			finally
 			{
@@ -390,7 +455,7 @@ namespace FoundationDB.Client
 			return await CreateClusterInternalAsync(clusterFile, cancellationToken).ConfigureAwait(false);
 		}
 
-		internal static Task<FdbCluster> CreateClusterInternalAsync(string clusterFile, CancellationToken cancellationToken)
+		internal static async Task<FdbCluster> CreateClusterInternalAsync(string clusterFile, CancellationToken cancellationToken)
 		{
 			EnsureIsStarted();
 
@@ -404,7 +469,8 @@ namespace FoundationDB.Client
 			//TODO: check the path ? (exists, readable, ...)
 
 			//TODO: have a way to configure the default IFdbClusterHander !
-			return FdbNativeCluster.CreateClusterAsync(clusterFile, cancellationToken);
+			var handler = await FdbNativeCluster.CreateClusterAsync(clusterFile, cancellationToken).ConfigureAwait(false);
+			return new FdbCluster(handler, clusterFile);
 		}
 
 		#endregion
@@ -502,8 +568,15 @@ namespace FoundationDB.Client
 			if (!s_eventLoopStarted) Start();
 		}
 
-		/// <summary>Select the correct API version, and start the Network Thread</summary>
-		/// <remarks>If you need a specific API version level, it must be defined by calling <see cref="UseApiVersion"/> before calling this method, otherwise the default API version will be selected.</remarks>
+		/// <summary>Select the API version level to use in this process, and start the Network Thread</summary>
+		public static void Start(int apiVersion)
+		{
+			UseApiVersion(apiVersion);
+			Start();
+		}
+
+		/// <summary>Start the Network Thread, using the currently selected API version level</summary>
+		/// <remarks>If you need a specific API version level, it must be defined by either calling <see cref="UseApiVersion"/> before calling this method, or by using the <see cref="Start(int)"/> override. Otherwise, the default API version will be selected.</remarks>
 		public static void Start()
 		{
 			if (s_started) return;
@@ -513,7 +586,7 @@ namespace FoundationDB.Client
 			s_started = true;
 
 			int apiVersion = s_apiVersion;
-			if (apiVersion <= 0) apiVersion = FdbNative.FDB_API_VERSION;
+			if (apiVersion <= 0) apiVersion = DefaultApiVersion;
 
 			if (Logging.On) Logging.Info(typeof(Fdb), "Start", String.Format("Selecting fdb API version {0}", apiVersion));
 
@@ -541,7 +614,7 @@ namespace FoundationDB.Client
 				DieOnError(err);
 			}
 			s_apiVersion = apiVersion;
-			
+
 			if (!string.IsNullOrWhiteSpace(Fdb.Options.TracePath))
 			{
 				if (Logging.On) Logging.Verbose(typeof(Fdb), "Start", String.Format("Will trace client activity in '{0}'", Fdb.Options.TracePath));
@@ -594,7 +667,6 @@ namespace FoundationDB.Client
 			try { }
 			finally
 			{
-			
 				// register with the AppDomain to ensure that everyting is cleared when the process exists
 				s_appDomainUnloadHandler = (sender, args) =>
 				{

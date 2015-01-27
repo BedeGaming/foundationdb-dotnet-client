@@ -30,7 +30,6 @@ namespace FoundationDB.Layers.Tuples
 {
 	using FoundationDB.Client;
 	using FoundationDB.Client.Converters;
-	using FoundationDB.Client.Utils;
 	using System;
 	using System.Collections;
 	using System.Collections.Generic;
@@ -58,6 +57,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <summary>Fourth and last element of the quartet</summary>
 		public readonly T4 Item4;
 
+		/// <summary>Create a tuple containing for items</summary>
 		public FdbTuple(T1 item1, T2 item2, T3 item3, T4 item4)
 		{
 			this.Item1 = item1;
@@ -66,8 +66,10 @@ namespace FoundationDB.Layers.Tuples
 			this.Item4 = item4;
 		}
 
+		/// <summary>Number of items in this tuple</summary>
 		public int Count { get { return 4; } }
 
+		/// <summary>Return the Nth item in this tuple</summary>
 		public object this[int index]
 		{
 			get

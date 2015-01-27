@@ -27,7 +27,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endregion
 
 using FoundationDB.Client;
-using FoundationDB.Client.Utils;
 using System;
 
 namespace FoundationDB.Layers.Tuples
@@ -40,6 +39,8 @@ namespace FoundationDB.Layers.Tuples
 
 		internal static readonly FdbTuplePackers.Encoder<T> Encoder = FdbTuplePackers.GetSerializer<T>(required: true);
 
+		internal static readonly Func<Slice, T> Decoder = FdbTuplePackers.GetDeserializer<T>(required: true);
+
 		/// <summary>Serialize a <typeparamref name="T"/> into a binary buffer</summary>
 		/// <param name="writer">Target buffer</param>
 		/// <param name="value">Value that will be serialized</param>
@@ -49,17 +50,28 @@ namespace FoundationDB.Layers.Tuples
 #endif
 		public static void SerializeTo(ref SliceWriter writer, T value)
 		{
-			FdbTuplePacker<T>.Encoder(ref writer, value);
+			Encoder(ref writer, value);
 		}
 
-		/// <summary>Serialize a <typeparamref name="T"/> into a slices</summary>
+		/// <summary>Serialize a value of type <typeparamref name="T"/> into a tuple segment</summary>
 		/// <param name="value">Value that will be serialized</param>
 		/// <returns>Slice that contains the binary representation of <paramref name="value"/></returns>
 		public static Slice Serialize(T value)
 		{
 			var writer = SliceWriter.Empty;
-			FdbTuplePacker<T>.Encoder(ref writer, value);
+			Encoder(ref writer, value);
 			return writer.ToSlice();
+		}
+
+		/// <summary>Deserialize a tuple segment into a value of type <typeparamref name="T"/></summary>
+		/// <param name="slice">Slice that contains the binary representation of a tuple item</param>
+		/// <returns>Decoded value, or an exception if the item type is not compatible</returns>
+#if !NET_4_0
+		[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+#endif
+		public static T Deserialize(Slice slice)
+		{
+			return Decoder(slice);
 		}
 
 	}

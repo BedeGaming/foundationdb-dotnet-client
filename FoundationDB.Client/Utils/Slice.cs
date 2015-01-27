@@ -422,7 +422,7 @@ namespace FoundationDB.Client
 			bool skipEmpty = options.HasFlag(StringSplitOptions.RemoveEmptyEntries);
 			if (input.Count == 0)
 			{
-				return skipEmpty ? Slice.EmptySliceArray : new Slice[1] { Slice.Empty };
+				return skipEmpty ? Slice.EmptySliceArray : new [] { Slice.Empty };
 			}
 
 			while (input.Count > 0)
@@ -489,7 +489,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)value,
 					(byte)(value >> 8)
 				},
@@ -517,7 +517,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)value,
 					(byte)(value >> 8)
 				},
@@ -532,7 +532,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)(value >> 8),
 					(byte)value
 				},
@@ -571,6 +571,7 @@ namespace FoundationDB.Client
 				}
 				if (value <= 65535)
 				{
+					//TODO: possible micro optimization is for values like 0x100, 0x201, 0x1413 or 0x4342, where we could use 2 consecutive bytes in the ByteSprite,
 					return new Slice(new byte[] { (byte)value, (byte)(value >> 8) }, 0, 2);
 				}
 			}
@@ -583,7 +584,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)value,
 					(byte)(value >> 8),
 					(byte)(value >> 16),
@@ -615,7 +616,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)value,
 					(byte)(value >> 8),
 					(byte)(value >> 16),
@@ -632,7 +633,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)(value >> 24),
 					(byte)(value >> 16),
 					(byte)(value >> 8),
@@ -677,7 +678,7 @@ namespace FoundationDB.Client
 		{
 			return new Slice(
 				new byte[]
-				{ 
+				{
 					(byte)value,
 					(byte)(value >> 8),
 					(byte)(value >> 16),
@@ -686,8 +687,8 @@ namespace FoundationDB.Client
 					(byte)(value >> 40),
 					(byte)(value >> 48),
 					(byte)(value >> 56)
-				}, 
-				0, 
+				},
+				0,
 				8
 			);
 		}
@@ -708,7 +709,7 @@ namespace FoundationDB.Client
 			{
 				return new Slice(
 					new byte[]
-					{ 
+					{
 						(byte)value,
 						(byte)(value >> 8),
 						(byte)(value >> 16),
@@ -780,6 +781,29 @@ namespace FoundationDB.Client
 		}
 
 		#endregion
+
+		#region decimals
+
+		/// <summary>Encode a 32-bit decimal into an 4-byte slice</summary>
+		public static Slice FromSingle(float value)
+		{
+			//TODO: may not work on BE platforms?
+			uint bits;
+			unsafe { bits = *(uint*)(&value); }
+			return FromFixedU32(bits);
+		}
+
+		/// <summary>Encode a 64-bit decimal into an 8-byte slice</summary>
+		public static Slice FromDouble(double value)
+		{
+			//TODO: may not work on BE platforms?
+			ulong bits;
+			unsafe { bits = *(ulong*)(&value); }
+			return FromFixedU64(bits);
+		}
+
+		#endregion
+
 
 		/// <summary>Create a 16-byte slice containing a System.Guid encoding according to RFC 4122 (Big Endian)</summary>
 		/// <remarks>WARNING: Slice.FromGuid(guid).GetBytes() will not produce the same result as guid.ToByteArray() !
@@ -891,7 +915,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Return a byte array containing all the bytes of the slice, or null if the slice is null</summary>
 		/// <returns>Byte array with a copy of the slice, or null</returns>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public byte[] GetBytes()
 		{
 			if (this.Count == 0) return this.Array == null ? null : Slice.EmptyArray;
@@ -904,7 +928,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Return a byte array containing a subset of the bytes of the slice, or null if the slice is null</summary>
 		/// <returns>Byte array with a copy of a subset of the slice, or null</returns>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public byte[] GetBytes(int offset, int count)
 		{
 			//TODO: throw if this.Array == null ? (what does "Slice.Nil.GetBytes(..., 0)" mean ?)
@@ -926,7 +950,7 @@ namespace FoundationDB.Client
 		/// You can use this method to convert text into specific encodings, load bitmaps (JPEG, PNG, ...), or any serialization format that requires a Stream or TextReader instance.
 		/// Disposing this stream will have no effect on the slice.
 		/// </remarks>
-		[Pure][NotNull]
+		[Pure, NotNull]
 		public SliceStream AsStream()
 		{
 			SliceHelpers.EnsureSliceIsValid(ref this);
@@ -935,7 +959,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Stringify a slice containing only ASCII chars</summary>
 		/// <returns>ASCII string, or null if the slice is null</returns>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public string ToAscii()
 		{
 			if (this.Count == 0) return this.HasValue ? String.Empty : default(string);
@@ -945,7 +969,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Stringify a slice containing an UTF-8 encoded string</summary>
 		/// <returns>Unicode string, or null if the slice is null</returns>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public string ToUnicode()
 		{
 			if (this.Count == 0) return this.HasValue ? String.Empty : default(string);
@@ -954,7 +978,7 @@ namespace FoundationDB.Client
 		}
 
 		/// <summary>Converts a slice using Base64 encoding</summary>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public string ToBase64()
 		{
 			if (this.Count == 0) return this.Array == null ? null : String.Empty;
@@ -964,7 +988,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Converts a slice into a string with each byte encoded into hexadecimal (lowercase)</summary>
 		/// <returns>"0123456789abcdef"</returns>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public string ToHexaString()
 		{
 			if (this.Count == 0) return this.Array == null ? null : String.Empty;
@@ -986,7 +1010,7 @@ namespace FoundationDB.Client
 		/// <summary>Converts a slice into a string with each byte encoded into hexadecimal (uppercase) separated by a char</summary>
 		/// <param name="sep">Character used to separate the hexadecimal pairs (ex: ' ')</param>
 		/// <returns>"01 23 45 67 89 ab cd ef"</returns>
-		[Pure][CanBeNull]
+		[Pure, CanBeNull]
 		public string ToHexaString(char sep)
 		{
 			if (this.Count == 0) return this.Array == null ? null : String.Empty;
@@ -1029,7 +1053,7 @@ namespace FoundationDB.Client
 
 		/// <summary>Helper method that dumps the slice as a string (if it contains only printable ascii chars) or an hex array if it contains non printable chars. It should only be used for logging and troubleshooting !</summary>
 		/// <returns>Returns either "'abc'", "&lt;00 42 7F&gt;", or "{ ...JSON... }". Returns "''" for Slice.Empty, and "" for <see cref="Slice.Nil"/></returns>
-		[Pure][NotNull]
+		[Pure, NotNull]
 		public string ToAsciiOrHexaString() //REVIEW: rename this to ToPrintableString() ?
 		{
 			//REVIEW: rename this to ToFriendlyString() ? or ToLoggableString() ?
@@ -1050,7 +1074,7 @@ namespace FoundationDB.Client
 				// look for JSON objets or arrays
 				if ((buffer[p] == '{' && buffer[p + n - 1] == '}') || (buffer[p] == '[' && buffer[p + n - 1] == ']'))
 				{
-					return EscapeString(new StringBuilder(n + 16), buffer, p, n, Encoding.UTF8).Append('\'').ToString();
+					return EscapeString(new StringBuilder(n + 16), buffer, p, n, Encoding.UTF8).ToString();
 				}
 			}
 
@@ -1848,7 +1872,7 @@ namespace FoundationDB.Client
 		/// <summary>Append an array of slice at the end of the current slice, all sharing the same buffer</summary>
 		/// <param name="slices">Slices that must be appended</param>
 		/// <returns>Array of slices (for all keys) that share the same underlying buffer</returns>
-		[Pure][NotNull]
+		[Pure, NotNull]
 		public Slice[] ConcatRange([NotNull] Slice[] slices)
 		{
 			if (slices == null) throw new ArgumentNullException("slices");
@@ -1875,7 +1899,7 @@ namespace FoundationDB.Client
 		/// <summary>Append a sequence of slice at the end of the current slice, all sharing the same buffer</summary>
 		/// <param name="slices">Slices that must be appended</param>
 		/// <returns>Array of slices (for all keys) that share the same underlying buffer</returns>
-		[Pure][NotNull]
+		[Pure, NotNull]
 		public Slice[] ConcatRange([NotNull] IEnumerable<Slice> slices)
 		{
 			if (slices == null) throw new ArgumentNullException("slices");

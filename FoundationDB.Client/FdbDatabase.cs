@@ -43,7 +43,7 @@ namespace FoundationDB.Client
 	/// <summary>FoundationDB database session handle</summary>
 	/// <remarks>An instance of this class can be used to create any number of concurrent transactions that will read and/or write to this particular database.</remarks>
 	[DebuggerDisplay("Name={m_name}, GlobalSpace={m_globalSpace}")]
-	public class FdbDatabase : IFdbDatabase, IFdbTransactional, IDisposable
+	public class FdbDatabase : IFdbDatabase, IFdbRetryable
 	{
 		#region Private Fields...
 
@@ -83,8 +83,11 @@ namespace FoundationDB.Client
 		/// <summary>Default Timeout value for all transactions</summary>
 		private int m_defaultTimeout;
 
-		/// <summary>Default RetryLimit value for all transactions</summary>
+		/// <summary>Default Retry Limit value for all transactions</summary>
 		private int m_defaultRetryLimit;
+
+		/// <summary>Default Max Retry Delay valeu for all transactions</summary>
+		private int m_defaultMaxRetryDelay;
 
 		/// <summary>Instance of the DirectoryLayer used by this detabase (lazy initialized)</summary>
 		private FdbDatabasePartition m_directory;
@@ -213,15 +216,11 @@ namespace FoundationDB.Client
 		internal FdbTransaction CreateNewTransaction(FdbOperationContext context)
 		{
 			Contract.Requires(context != null && context.Database != null);
+			ThrowIfDisposed();
 
 			// force the transaction to be read-only, if the database itself is read-only
 			var mode = context.Mode;
 			if (m_readOnly) mode |= FdbTransactionMode.ReadOnly;
-
-			ThrowIfDisposed();
-#if DEPRECATED
-			if (m_handle.IsInvalid) throw Fdb.Errors.CannotCreateTransactionOnInvalidDatabase();
-#endif
 
 			int id = Interlocked.Increment(ref s_transactionCounter);
 
@@ -236,6 +235,7 @@ namespace FoundationDB.Client
 				// set default options..
 				if (m_defaultTimeout != 0) trans.Timeout = m_defaultTimeout;
 				if (m_defaultRetryLimit != 0) trans.RetryLimit = m_defaultRetryLimit;
+				if (m_defaultMaxRetryDelay != 0) trans.MaxRetryDelay = m_defaultMaxRetryDelay;
 				// flag as ready
 				trans.State = FdbTransaction.STATE_READY;
 				return trans;
@@ -618,6 +618,18 @@ namespace FoundationDB.Client
 			{
 				if (value < 0) throw new ArgumentOutOfRangeException("value", value, "RetryLimit value cannot be negative");
 				m_defaultRetryLimit = value;
+			}
+		}
+
+		/// <summary>Default Max Retry Delay value for all transactions created from this database instance.</summary>
+		/// <remarks>Only effective for future transactions</remarks>
+		public int DefaultMaxRetryDelay
+		{
+			get { return m_defaultMaxRetryDelay; }
+			set
+			{
+				if (value < 0) throw new ArgumentOutOfRangeException("value", value, "MaxRetryDelay value cannot be negative");
+				m_defaultMaxRetryDelay = value;
 			}
 		}
 

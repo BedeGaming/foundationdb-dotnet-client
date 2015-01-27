@@ -1,5 +1,5 @@
 ﻿#region BSD Licence
-/* Copyright (c) 2013-2014, Doxense SAS
+/* Copyright (c) 2013-2015, Doxense SAS
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@ namespace FoundationDB.Layers.Tuples
 {
 	using FoundationDB.Client;
 	using FoundationDB.Client.Utils;
+	using JetBrains.Annotations;
 	using System;
 	using System.Text;
 
@@ -86,7 +87,7 @@ namespace FoundationDB.Layers.Tuples
 				}
 			}
 
-			WriteInt64Slow(ref writer, (long)value);
+			WriteInt64Slow(ref writer, value);
 		}
 
 		/// <summary>Writes an Int64 at the end, and advance the cursor</summary>
@@ -180,7 +181,7 @@ namespace FoundationDB.Layers.Tuples
 			}
 			else
 			{ // >= 256
-				WriteUInt64Slow(ref writer, (ulong)value);
+				WriteUInt64Slow(ref writer, value);
 			}
 		}
 
@@ -442,7 +443,6 @@ namespace FoundationDB.Layers.Tuples
 			// We will tterate through the string, filling as much of the buffer as possible
 
 			bool done;
-			int charsUsed, bytesUsed;
 			int remaining = count;
 			ptr = chars;
 
@@ -463,6 +463,7 @@ namespace FoundationDB.Layers.Tuples
 			// note: encoder.Convert() tries to fill up the buffer as much as possible with complete chars, and will set 'done' to true when all chars have been converted.
 			do
 			{
+				int charsUsed, bytesUsed;
 				encoder.Convert(ptr, remaining, buf, bufLen, true, out charsUsed, out bytesUsed, out done);
 				if (bytesUsed > 0)
 				{
@@ -511,7 +512,7 @@ namespace FoundationDB.Layers.Tuples
 		}
 
 		/// <summary>Writes a binary string</summary>
-		public static void WriteBytes(ref SliceWriter writer, byte[] value, int offset, int count)
+		public static void WriteBytes(ref SliceWriter writer, [NotNull] byte[] value, int offset, int count)
 		{
 			WriteNulEscapedBytes(ref writer, FdbTupleTypes.Bytes, value, offset, count);
 		}
@@ -523,7 +524,7 @@ namespace FoundationDB.Layers.Tuples
 		}
 
 		/// <summary>Writes a buffer with all instances of 0 escaped as '00 FF'</summary>
-		internal static void WriteNulEscapedBytes(ref SliceWriter writer, byte type, byte[] value, int offset, int count)
+		internal static void WriteNulEscapedBytes(ref SliceWriter writer, byte type, [NotNull] byte[] value, int offset, int count)
 		{
 			int n = count;
 
@@ -560,7 +561,7 @@ namespace FoundationDB.Layers.Tuples
 		}
 
 		/// <summary>Writes a buffer with all instances of 0 escaped as '00 FF'</summary>
-		private static void WriteNulEscapedBytes(ref SliceWriter writer, byte type, byte[] value)
+		private static void WriteNulEscapedBytes(ref SliceWriter writer, byte type, [NotNull] byte[] value)
 		{
 			int n = value.Length;
 			// we need to know if there are any NUL chars (\0) that need escaping...
@@ -664,7 +665,7 @@ namespace FoundationDB.Layers.Tuples
 			return value;
 		}
 
-		internal static ArraySegment<byte> UnescapeByteString(byte[] buffer, int offset, int count)
+		internal static ArraySegment<byte> UnescapeByteString([NotNull] byte[] buffer, int offset, int count)
 		{
 			Contract.Requires(buffer != null && offset >= 0 && count >= 0);
 
@@ -684,7 +685,7 @@ namespace FoundationDB.Layers.Tuples
 			return new ArraySegment<byte>(buffer, offset, count);
 		}
 
-		internal static ArraySegment<byte> UnescapeByteStringSlow(byte[] buffer, int offset, int count, int offsetOfFirstZero = 0)
+		internal static ArraySegment<byte> UnescapeByteStringSlow([NotNull] byte[] buffer, int offset, int count, int offsetOfFirstZero = 0)
 		{
 			Contract.Requires(buffer != null && offset >= 0 && count >= 0);
 
@@ -826,7 +827,7 @@ namespace FoundationDB.Layers.Tuples
 				throw new FormatException("Slice has invalid size for a 128-bit UUID");
 			}
 
-			return new Uuid128(new Slice(slice.Array, slice.Offset + 1, 8));
+			return new Uuid128(new Slice(slice.Array, slice.Offset + 1, 16));
 		}
 
 		internal static Uuid64 ParseUuid64(Slice slice)
@@ -839,6 +840,77 @@ namespace FoundationDB.Layers.Tuples
 			}
 
 			return new Uuid64(new Slice(slice.Array, slice.Offset + 1, 8));
+		}
+
+		#endregion
+
+		#region Parsing...
+
+		/// <summary>Decode the next token from a packed tuple</summary>
+		/// <param name="reader">Parser from wich to read the next token</param>
+		/// <returns>Token decoded, or Slice.Nil if there was no more data in the buffer</returns>
+		public static Slice ParseNext(ref SliceReader reader)
+		{
+			int type = reader.PeekByte();
+			switch (type)
+			{
+				case -1:
+				{ // End of Stream
+					return Slice.Nil;
+				}
+
+				case FdbTupleTypes.Nil:
+				{ // <00> => null
+					reader.Skip(1);
+					return Slice.Empty;
+				}
+
+				case FdbTupleTypes.Bytes:
+				{ // <01>(bytes)<00>
+					return reader.ReadByteString();
+				}
+
+				case FdbTupleTypes.Utf8:
+				{ // <02>(utf8 bytes)<00>
+					return reader.ReadByteString();
+				}
+
+				case FdbTupleTypes.Single:
+				{ // <20>(4 bytes)
+					return reader.ReadBytes(5);
+				}
+
+				case FdbTupleTypes.Double:
+				{ // <21>(8 bytes)
+					return reader.ReadBytes(9);
+				}
+
+				case FdbTupleTypes.Uuid128:
+				{ // <30>(16 bytes)
+					return reader.ReadBytes(17);
+				}
+
+				case FdbTupleTypes.Uuid64:
+				{ // <31>(8 bytes)
+					return reader.ReadBytes(9);
+				}
+
+				case FdbTupleTypes.AliasDirectory:
+				case FdbTupleTypes.AliasSystem:
+				{ // <FE> or <FF>
+					return reader.ReadBytes(1);
+				}
+			}
+
+			if (type <= FdbTupleTypes.IntPos8 && type >= FdbTupleTypes.IntNeg8)
+			{
+				int bytes = type - FdbTupleTypes.IntZero;
+				if (bytes < 0) bytes = -bytes;
+
+				return reader.ReadBytes(1 + bytes);
+			}
+
+			throw new FormatException(String.Format("Invalid tuple type byte {0} at index {1}/{2}", type, reader.Position, reader.Buffer.Count));
 		}
 
 		#endregion

@@ -33,7 +33,7 @@ namespace FoundationDB.Client
 	using System.Threading;
 
 	/// <summary>Database connection context.</summary>
-	public interface IFdbDatabase : IFdbReadOnlyTransactional, IFdbTransactional, IFdbSubspace, IFdbKey, IDisposable
+	public interface IFdbDatabase : IFdbReadOnlyRetryable, IFdbRetryable, IFdbSubspace, IFdbKey, IDisposable
 	{
 		/// <summary>Name of the database</summary>
 		string Name { [NotNull] get; }
@@ -76,6 +76,8 @@ namespace FoundationDB.Client
 		/// <summary>Default Retry Limit value for all transactions created from this database instance.</summary>
 		/// <remarks>Only effective for future transactions</remarks>
 		int DefaultRetryLimit { get; set; }
+
+		int DefaultMaxRetryDelay { get; set; }
 
 		/// <summary>Start a new transaction on this database, with the specified mode</summary>
 		/// <param name="mode">Mode of the transaction (read-only, read-write, ....)</param>

@@ -30,7 +30,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Async
 {
-	using FoundationDB.Client.Utils;
 	using JetBrains.Annotations;
 	using System;
 	using System.Diagnostics;
@@ -131,7 +130,7 @@ namespace FoundationDB.Async
 					{
 						m_state = STATE_FAILED;
 						LogPump("Stopping after this error");
-						current.ThrowIfFailed();
+						current.ThrowForNonSuccess();
 					}
 					else if (current.IsEmpty)
 					{
@@ -183,7 +182,6 @@ namespace FoundationDB.Async
 		public void Dispose()
 		{
 			m_state = STATE_DISPOSED;
-			GC.SuppressFinalize(this);
 		}
 
 		#region Debugging...

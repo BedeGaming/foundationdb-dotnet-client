@@ -28,7 +28,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FoundationDB.Client
 {
-	using FoundationDB.Client.Utils;
 	using JetBrains.Annotations;
 	using System;
 	using System.ComponentModel;
@@ -316,7 +315,7 @@ namespace FoundationDB.Client
 			return m_packed;
 		}
 
-		[Pure][NotNull]
+		[Pure, NotNull]
 		public byte[] ToByteArray()
 		{
 			// We must use Big Endian when serializing the UUID

@@ -1,5 +1,5 @@
 ﻿#region BSD Licence
-/* Copyright (c) 2013-2014, Doxense SAS
+/* Copyright (c) 2013-2015, Doxense SAS
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -36,23 +36,26 @@ namespace FoundationDB.Layers.Tuples
 	/// <summary>Add extensions methods that deal with tuples on various types</summary>
 	public static class FdbTupleExtensions
 	{
+
 		#region IFdbTuple extensions...
 
 		/// <summary>Returns true if the tuple is either null or empty</summary>
+		[ContractAnnotation("null => true")]
 		public static bool IsNullOrEmpty(this IFdbTuple tuple)
 		{
 			return tuple == null || tuple.Count == 0;
 		}
 
 		/// <summary>Returns true if the tuple is not null, and contains only one item</summary>
+		[ContractAnnotation("null => false")]
 		public static bool IsSingleton(this IFdbTuple tuple)
 		{
 			return tuple != null && tuple.Count == 1;
 		}
 
 		/// <summary>Returns an array containing all the objects of a tuple</summary>
-		[NotNull]
-		public static object[] ToArray(this IFdbTuple tuple)
+		[NotNull, ItemCanBeNull]
+		public static object[] ToArray([NotNull] this IFdbTuple tuple)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 
@@ -66,7 +69,7 @@ namespace FoundationDB.Layers.Tuples
 
 		/// <summary>Returns a typed array containing all the items of a tuple</summary>
 		[NotNull]
-		public static T[] ToArray<T>(this IFdbTuple tuple)
+		public static T[] ToArray<T>([NotNull] this IFdbTuple tuple)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 
@@ -83,14 +86,14 @@ namespace FoundationDB.Layers.Tuples
 
 		/// <summary>Returns a byte array containing the packed version of a tuple</summary>
 		[CanBeNull]
-		public static byte[] GetBytes(this IFdbTuple tuple)
+		public static byte[] GetBytes([NotNull] this IFdbTuple tuple)
 		{
 			return tuple.ToSlice().GetBytes();
 		}
 
 		/// <summary>Concatenates two tuples together</summary>
 		[NotNull]
-		public static IFdbTuple Concat(this IFdbTuple head, IFdbTuple tail)
+		public static IFdbTuple Concat([NotNull] this IFdbTuple head, [NotNull] IFdbTuple tail)
 		{
 			if (head == null) throw new ArgumentNullException("head");
 			if (tail == null) throw new ArgumentNullException("tail");
@@ -106,7 +109,7 @@ namespace FoundationDB.Layers.Tuples
 
 		/// <summary>Appends two values at the end of a tuple</summary>
 		[NotNull]
-		public static IFdbTuple Append<T1, T2>(this IFdbTuple tuple, T1 value1, T2 value2)
+		public static IFdbTuple Append<T1, T2>([NotNull] this IFdbTuple tuple, T1 value1, T2 value2)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 			return new FdbJoinedTuple(tuple, FdbTuple.Create<T1, T2>(value1, value2));
@@ -114,7 +117,7 @@ namespace FoundationDB.Layers.Tuples
 
 		/// <summary>Appends three values at the end of a tuple</summary>
 		[NotNull]
-		public static IFdbTuple Append<T1, T2, T3>(this IFdbTuple tuple, T1 value1, T2 value2, T3 value3)
+		public static IFdbTuple Append<T1, T2, T3>([NotNull] this IFdbTuple tuple, T1 value1, T2 value2, T3 value3)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 			return new FdbJoinedTuple(tuple, FdbTuple.Create<T1, T2, T3>(value1, value2, value3));
@@ -122,7 +125,7 @@ namespace FoundationDB.Layers.Tuples
 
 		/// <summary>Appends four values at the end of a tuple</summary>
 		[NotNull]
-		public static IFdbTuple Append<T1, T2, T3, T4>(this IFdbTuple tuple, T1 value1, T2 value2, T3 value3, T4 value4)
+		public static IFdbTuple Append<T1, T2, T3, T4>([NotNull] this IFdbTuple tuple, T1 value1, T2 value2, T3 value3, T4 value4)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 			return new FdbJoinedTuple(tuple, FdbTuple.Create<T1, T2, T3, T4>(value1, value2, value3, value4));
@@ -131,7 +134,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <summary>Creates a key range containing all children of this tuple, from tuple.pack()+'\0' to tuple.pack()+'\xFF'</summary>
 		/// <param name="tuple">Tuple that is the suffix of all keys</param>
 		/// <returns>Range of all keys suffixed by the tuple. The tuple itself will not be included</returns>
-		public static FdbKeyRange ToRange(this IFdbTuple tuple)
+		public static FdbKeyRange ToRange([NotNull] this IFdbTuple tuple)
 		{
 			return ToRange(tuple, false);
 		}
@@ -140,7 +143,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="tuple">Tuple that is the prefix of all keys</param>
 		/// <param name="includePrefix">If true, the tuple key itself is included, if false only the children keys are included</param>
 		/// <returns>Range of all keys suffixed by the tuple. The tuple itself will be included if <paramref name="includePrefix"/> is true</returns>
-		public static FdbKeyRange ToRange(this IFdbTuple tuple, bool includePrefix)
+		public static FdbKeyRange ToRange([NotNull] this IFdbTuple tuple, bool includePrefix)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 
@@ -168,7 +171,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="tuple"></param>
 		/// <returns>Create a copy of the tuple that can be reused frequently to pack values</returns>
 		/// <remarks>If the tuple is already memoized, the current instance will be returned</remarks>
-		[CanBeNull]
+		[CanBeNull, ContractAnnotation("null => null")]
 		public static FdbMemoizedTuple Memoize(this IFdbTuple tuple)
 		{
 			if (tuple == null) return null;
@@ -197,7 +200,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="offset">Offset from the start of the current tuple (negative value means from the end)</param>
 		/// <returns>Tuple that contains only the items past the first <param name="offset"/> items of the current tuple</returns>
 		[NotNull]
-		public static IFdbTuple Substring(this IFdbTuple tuple, int offset)
+		public static IFdbTuple Substring([NotNull] this IFdbTuple tuple, int offset)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 
@@ -210,7 +213,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="count">Number of items to keep</param>
 		/// <returns>Tuple that contains only the selected items from the current tuple</returns>
 		[NotNull]
-		public static IFdbTuple Substring(this IFdbTuple tuple, int offset, int count)
+		public static IFdbTuple Substring([NotNull] this IFdbTuple tuple, int offset, int count)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 			if (count < 0) throw new ArgumentOutOfRangeException("count", count, "Count cannot be negative.");
@@ -224,7 +227,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="left">Larger tuple</param>
 		/// <param name="right">Smaller tuple</param>
 		/// <returns>True if the beginning of <paramref name="left"/> is equal to <paramref name="right"/> or if both tuples are identical</returns>
-		public static bool StartsWith(this IFdbTuple left, IFdbTuple right)
+		public static bool StartsWith([NotNull] this IFdbTuple left, [NotNull] IFdbTuple right)
 		{
 			if (left == null) throw new ArgumentNullException("left");
 			if (right == null) throw new ArgumentNullException("right");
@@ -237,7 +240,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="left">Larger tuple</param>
 		/// <param name="right">Smaller tuple</param>
 		/// <returns>True if the end of <paramref name="left"/> is equal to <paramref name="right"/> or if both tuples are identical</returns>
-		public static bool EndsWith(this IFdbTuple left, IFdbTuple right)
+		public static bool EndsWith([NotNull] this IFdbTuple left, [NotNull] IFdbTuple right)
 		{
 			if (left == null) throw new ArgumentNullException("left");
 			if (right == null) throw new ArgumentNullException("right");
@@ -250,7 +253,7 @@ namespace FoundationDB.Layers.Tuples
 		/// <param name="tuple">Tuple that contains any number of elements</param>
 		/// <returns>Sequence of tuples that contains a single element</returns>
 		/// <example>(123, ABC, false,).Explode() => [ (123,), (ABC,), (false,) ]</example>
-		public static IEnumerable<IFdbTuple> Explode(this IFdbTuple tuple)
+		public static IEnumerable<IFdbTuple> Explode([NotNull] this IFdbTuple tuple)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 
@@ -259,18 +262,20 @@ namespace FoundationDB.Layers.Tuples
 			while (p < n)
 			{
 				yield return tuple[p, p + 1];
+				++p;
 			}
 		}
 
 		/// <summary>Returns a key that is immediately after the packed representation of this tuple</summary>
 		/// <remarks>This is the equivalent of manually packing the tuple and incrementing the resulting slice</remarks>
-		public static Slice Increment(this IFdbTuple tuple)
+		public static Slice Increment([NotNull] this IFdbTuple tuple)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 			return FdbKey.Increment(tuple.ToSlice());
 		}
 
-		public static FdbKeySelectorPair ToSelectorPair(this IFdbTuple tuple)
+		/// <summary>Returns a Key Selector pair that defines the range of all items contained under this tuple</summary>
+		public static FdbKeySelectorPair ToSelectorPair([NotNull] this IFdbTuple tuple)
 		{
 			if (tuple == null) throw new ArgumentNullException("tuple");
 

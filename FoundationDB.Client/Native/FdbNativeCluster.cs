@@ -1,5 +1,5 @@
 ﻿#region BSD Licence
-/* Copyright (c) 2013-2014, Doxense SAS
+/* Copyright (c) 2013-2015, Doxense SAS
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ namespace FoundationDB.Client.Native
 	using System.Threading.Tasks;
 
 	/// <summary>Wraps a native FDBCluster* handle</summary>
-	internal sealed class FdbNativeCluster : IFdbClusterHandler, IDisposable
+	internal sealed class FdbNativeCluster : IFdbClusterHandler
 	{
 		private readonly ClusterHandle m_handle;
 
@@ -47,7 +47,7 @@ namespace FoundationDB.Client.Native
 			m_handle = handle;
 		}
 
-		public static Task<FdbCluster> CreateClusterAsync(string clusterFile, CancellationToken cancellationToken)
+		public static Task<IFdbClusterHandler> CreateClusterAsync(string clusterFile, CancellationToken cancellationToken)
 		{
 			var future = FdbNative.CreateCluster(clusterFile);
 			return FdbFuture.CreateTaskFromHandle(future,
@@ -60,7 +60,8 @@ namespace FoundationDB.Client.Native
 						cluster.Dispose();
 						throw Fdb.MapToException(err);
 					}
-					return new FdbCluster(new FdbNativeCluster(cluster), clusterFile);
+					var handler = new FdbNativeCluster(cluster);
+					return (IFdbClusterHandler) handler;
 				},
 				cancellationToken
 			);
@@ -108,7 +109,8 @@ namespace FoundationDB.Client.Native
 						database.Dispose();
 						throw Fdb.MapToException(err);
 					}
-					return (IFdbDatabaseHandler) new FdbNativeDatabase(database);
+					var handler = new FdbNativeDatabase(database);
+                    return (IFdbDatabaseHandler) handler;
 				},
 				cancellationToken
 			);
@@ -116,16 +118,7 @@ namespace FoundationDB.Client.Native
 
 		public void Dispose()
 		{
-			Dispose(true);
-			GC.SuppressFinalize(this);
-		}
-
-		private void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				if (m_handle != null) m_handle.Dispose();
-			}
+			if (m_handle != null) m_handle.Dispose();
 		}
 
 	}

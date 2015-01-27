@@ -131,7 +131,11 @@ namespace FoundationDB.Async
 			}
 			catch (Exception e)
 			{
+#if NET_4_0
 				return Maybe.Error<TOutput>(e);
+#else
+				return Maybe.Error<TOutput>(ExceptionDispatchInfo.Capture(e));
+#endif
 			}
 		}
 
@@ -292,12 +296,17 @@ namespace FoundationDB.Async
 		{
 			try
 			{
+				ct.ThrowIfCancellationRequested();
 				//TODO: use the cancellation token !
 				return await task.ConfigureAwait(false);
 			}
 			catch(Exception e)
 			{
+#if NET_4_0
 				return Maybe.Error<TOutput>(e);
+#else
+				return Maybe.Error<TOutput>(ExceptionDispatchInfo.Capture(e));
+#endif
 			}
 			finally
 			{

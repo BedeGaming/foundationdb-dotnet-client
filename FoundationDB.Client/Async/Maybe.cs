@@ -47,10 +47,16 @@ namespace FoundationDB.Async
 		public readonly T Value;
 
 		/// <summary>If HasValue is false optinally holds an error that was captured</summary>
-		private readonly object m_errorContainer;
+		private readonly object m_errorContainer; // either an Exception, or an ExceptionDispatchInfo
 
 		internal Maybe(bool hasValue, T value, object errorContainer)
 		{
+#if NET_4_0
+			Contract.Requires(errorContainer == null || (errorContainer is Exception));
+#else
+			Contract.Requires(errorContainer == null || (errorContainer is Exception) || (errorContainer is ExceptionDispatchInfo));
+#endif
+
 			this.HasValue = hasValue;
 			this.Value = value;
 			m_errorContainer = errorContainer;
@@ -66,7 +72,7 @@ namespace FoundationDB.Async
 		/// <returns></returns>
 		public T GetValueOrDefault()
 		{
-			ThrowIfFailed();
+			ThrowForNonSuccess();
 			return this.Value;
 		}
 
@@ -81,16 +87,15 @@ namespace FoundationDB.Async
 		{
 			get
 			{
-				var exception = m_errorContainer as Exception;
-				if (exception != null) return exception;
-
+#if !NET_4_0
 				var edi = m_errorContainer as ExceptionDispatchInfo;
 				if (edi != null) return edi.SourceException;
-
-				return null;
+#endif
+				return m_errorContainer as Exception;
 			}
 		}
 
+#if !NET_4_0
 		/// <summary>Return the captured error context, or null if there wasn't any</summary>
 		public ExceptionDispatchInfo CapturedError
 		{
@@ -105,21 +110,22 @@ namespace FoundationDB.Async
 				return null;
 			}
 		}
+#endif
 
 		/// <summary>Rethrows any captured error, if there was one.</summary>
-		public void ThrowIfFailed()
+		public void ThrowForNonSuccess()
 		{
 			if (m_errorContainer != null)
 			{
 				var exception = m_errorContainer as Exception;
-				if (exception != null)
-				{
-					throw exception;
-				}
-				else
+#if !NET_4_0
+				if (exception == null)
 				{
 					((ExceptionDispatchInfo)m_errorContainer).Throw();
+					return; // never reached, but helps with code analysis
 				}
+#endif
+				throw exception;
 			}
 		}
 
@@ -224,11 +230,13 @@ namespace FoundationDB.Async
 			return new Maybe<T>(false, default(T), e);
 		}
 
+#if !NET_4_0
 		/// <summary>Capture an exception into a <see cref="Maybe{T}"/></summary>
 		public static Maybe<T> Error<T>(ExceptionDispatchInfo e)
 		{
 			return new Maybe<T>(false, default(T), e);
 		}
+#endif
 
 		/// <summary>Immediately apply a function to a value, and capture the result into a <see cref="Maybe{T}"/></summary>
 		public static Maybe<R> Apply<T, R>(T value, Func<T, R> lambda)
@@ -240,7 +248,11 @@ namespace FoundationDB.Async
 			}
 			catch (Exception e)
 			{
+#if NET_4_0
 				return Error<R>(e);
+#else
+				return Error<R>(ExceptionDispatchInfo.Capture(e));
+#endif
 			}
 		}
 
@@ -254,7 +266,11 @@ namespace FoundationDB.Async
 			}
 			catch (Exception e)
 			{
+#if NET_4_0
 				return Error<R>(e);
+#else
+				return Error<R>(ExceptionDispatchInfo.Capture(e));
+#endif
 			}
 		}
 
@@ -264,7 +280,11 @@ namespace FoundationDB.Async
 			Contract.Requires(lambda != null);
 			if (!value.HasValue)
 			{
-				if (value.HasFailed) return Error<R>(value.Error);
+				if (value.HasFailed)
+				{
+					// keep the original error untouched
+					return new Maybe<R>(false, default(R), value.ErrorContainer);
+				}
 				return Nothing<R>();
 			}
 			try
@@ -283,7 +303,11 @@ namespace FoundationDB.Async
 			Contract.Requires(lambda != null);
 			if (!value.HasValue)
 			{
-				if (value.HasFailed) return Error<R>(value.Error);
+				if (value.HasFailed)
+				{
+					// keep the original error untouched
+					return new Maybe<R>(false, default(R), value.ErrorContainer);
+				}
 				return Nothing<R>();
 			}
 			try
@@ -299,6 +323,7 @@ namespace FoundationDB.Async
 		/// <summary>Convert a completed <see cref="Task{T}"/> into an equivalent <see cref="Maybe{T}"/></summary>
 		public static Maybe<T> FromTask<T>([NotNull] Task<T> task)
 		{
+			//REVIEW: should we return Maybe<T>.Empty if task == null ?
 			Contract.Requires(task != null);
 			switch (task.Status)
 			{
@@ -308,7 +333,7 @@ namespace FoundationDB.Async
 				}
 				case TaskStatus.Faulted:
 				{
-					// note: we want to have a nice stack, so we unwrap the aggregate exception
+					//TODO: pass the failed task itself as the error container? (we would keep the original callstack that way...)
 					var aggEx = task.Exception.Flatten();
 					if (aggEx.InnerExceptions.Count == 1)
 					{
@@ -339,7 +364,13 @@ namespace FoundationDB.Async
 				}
 				case TaskStatus.Faulted:
 				{
-					return Error<T>(task.Exception);
+					//TODO: pass the failed task itself as the error container? (we would keep the original callstack that way...)
+					var aggEx = task.Exception.Flatten();
+					if (aggEx.InnerExceptions.Count == 1)
+					{
+						return Maybe.Error<T>(aggEx.InnerException);
+					}
+					return Maybe.Error<T>(aggEx);
 				}
 				case TaskStatus.Canceled:
 				{
@@ -364,7 +395,13 @@ namespace FoundationDB.Async
 				}
 				case TaskStatus.Faulted:
 				{
-					return Task.FromResult(Error<T>(task.Exception));
+					//TODO: pass the failed task itself as the error container? (we would keep the original callstack that way...)
+					var aggEx = task.Exception.Flatten();
+					if (aggEx.InnerExceptions.Count == 1)
+					{
+						return Task.FromResult(Maybe.Error<T>(aggEx.InnerException));
+					}
+					return Task.FromResult(Maybe.Error<T>(aggEx));
 				}
 				case TaskStatus.Canceled:
 				{

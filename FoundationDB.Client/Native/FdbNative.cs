@@ -43,7 +43,8 @@ namespace FoundationDB.Client.Native
 {
 	internal static unsafe class FdbNative
 	{
-		public const int FDB_API_VERSION = 200;
+		public const int FDB_API_MIN_VERSION = 200;
+		public const int FDB_API_MAX_VERSION = 300;
 
 #if MONO
 		/// <summary>Name of the C API dll used for P/Invoking</summary>
@@ -239,11 +240,21 @@ namespace FoundationDB.Client.Native
 			// - If String.Empty, call win32 LoadLibrary("fdb_c.dll") and let the os find the file (using the standard OS behavior)
 			// - Else, combine the path with "fdb_c.dll" and call LoadLibrary with the resulting (relative or absolute) path
 
-			if (Fdb.Options.NativeLibPath != null)
+			var libraryPath = Fdb.Options.NativeLibPath;
+			if (libraryPath != null)
 			{
 				try
 				{
-					FdbCLib = UnmanagedLibrary.Load(Path.Combine(Fdb.Options.NativeLibPath, FDB_C_DLL));
+					if (libraryPath.Length == 0)
+					{ // CLR will handle the search
+						libraryPath = FDB_C_DLL;
+					}
+					else if (!libraryPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+					{ // add the file name
+						libraryPath = Path.Combine(Fdb.Options.NativeLibPath, FDB_C_DLL);
+					}
+
+					FdbCLib = UnmanagedLibrary.Load(libraryPath);
 				}
 				catch (Exception e)
 				{
@@ -321,7 +332,7 @@ namespace FoundationDB.Client.Native
 		/// <summary>fdb_select_api_impl</summary>
 		public static FdbError SelectApiVersion(int version)
 		{
-			return SelectApiVersionImpl(version, FDB_API_VERSION);
+			return SelectApiVersionImpl(version, GetMaxApiVersion());
 		}
 
 		/// <summary>fdb_get_max_api_version</summary>
@@ -740,7 +751,7 @@ namespace FoundationDB.Client.Native
 					for (int i = 0; i < count; i++)
 					{
 						//TODO: protect against negative values or values too big ?
-						Contract.Assert(kvp[i].KeyLength >= 0 && kvp[i].KeyLength >= 0);
+						Contract.Assert(kvp[i].KeyLength >= 0 && kvp[i].ValueLength >= 0);
 						total += kvp[i].KeyLength + kvp[i].ValueLength;
 					}
 

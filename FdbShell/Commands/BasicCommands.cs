@@ -73,7 +73,7 @@ namespace FdbShell
 							}
 							else
 							{
-								log.WriteLine("  {0,-12} {1,-12} {3,9:N0} {2}", FdbKey.Dump(subfolder.Copy().Key), subfolder.Layer.IsNullOrEmpty ? "-" : ("<" + subfolder.Layer.ToUnicode() + ">"), name, "-");
+								log.WriteLine("  {0,-12} {1,-12} {3,9} {2}", FdbKey.Dump(subfolder.Copy().Key), subfolder.Layer.IsNullOrEmpty ? "-" : ("<" + subfolder.Layer.ToUnicode() + ">"), name, "-");
 							}
 						}
 						else
@@ -212,7 +212,7 @@ namespace FdbShell
 			var folder = (await TryOpenCurrentDirectoryAsync(path, db, ct)) as FdbDirectorySubspace;
 			if (folder == null)
 			{
-				log.WriteLine("# Directory {0} does not exist", path);
+				log.WriteLine("# Directory {0} does not exist", String.Join("/", path));
 				return;
 			}
 
@@ -225,7 +225,7 @@ namespace FdbShell
 			});
 
 			long count = await Fdb.System.EstimateCountAsync(db, copy.ToRange(), progress, ct);
-			log.WriteLine("\r# Found {0:N0} keys in {1}", count, String.Join("/", folder.Path));
+			log.WriteLine("\r# Found {0:N0} keys in {1}", count, folder.FullName);
 		}
 
 		/// <summary>Shows the first few keys of a directory</summary>
@@ -335,7 +335,7 @@ namespace FdbShell
 
 			var shards = await Fdb.System.GetChunksAsync(db, span, ct);
 			int totalShards = shards.Count;
-			log.WriteLine("Found {0} shard(s) in partition /{1}", totalShards, string.Join("/", folder.DirectoryLayer.Path));
+			log.WriteLine("Found {0} shard(s) in partition /{1}", totalShards, folder.DirectoryLayer.FullName);
 
 			log.WriteLine("Listing all directories...");
 			var map = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -365,7 +365,7 @@ namespace FdbShell
 					var sub = await cur.TryOpenAsync(db, name, ct);
 					if (sub != null)
 					{
-						var p = String.Join("/", sub.Path);
+						var p = sub.FullName;
 						if (sub is FdbDirectoryPartition)
 						{
 							log.WriteLine("\r! Skipping partition {0}     ", sub.Name);
@@ -378,7 +378,6 @@ namespace FdbShell
 						dirs.Add(sub);
 					}
 				}
-	
 			}
 			log.Write("\r" + new string(' ', n + 2));
 			log.WriteLine("\r> Found {0} sub-directories", dirs.Count);
@@ -396,7 +395,7 @@ namespace FdbShell
 
 				var p = dir.Path.ToArray();
 				var key = ((FdbSubspace)dir).Key;
-				
+
 				// verify that the subspace has at least one key inside
 				var bounds = await db.ReadAsync(async (tr) =>
 				{
@@ -436,7 +435,7 @@ namespace FdbShell
 
 			if (bigBad != null)
 			{
-				log.WriteLine("Biggest folder is /{0} with {1} shards ({2:N1}% total, {3:N1}% subtree)", String.Join("/", bigBad.Path), max, 100.0 * max / totalShards, 100.0 * max / foundShards);
+				log.WriteLine("Biggest folder is /{0} with {1} shards ({2:N1}% total, {3:N1}% subtree)", bigBad.FullName, max, 100.0 * max / totalShards, 100.0 * max / foundShards);
 				log.WriteLine();
 			}
 		}
@@ -460,7 +459,7 @@ namespace FdbShell
 			log.WriteLine("[Cluster] {0}", coords.Id);
 
 			var servers = await db.QueryAsync(tr => tr
-				.WithAccessToSystemKeys()
+				.WithReadAccessToSystemKeys()
 				.GetRange(FdbKeyRange.StartsWith(Fdb.System.ServerList))
 				.Select(kvp => new
 				{

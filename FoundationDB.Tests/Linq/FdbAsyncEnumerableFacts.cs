@@ -30,6 +30,7 @@ namespace FoundationDB.Linq.Tests
 {
 	using FoundationDB.Async;
 	using FoundationDB.Client.Tests;
+	using FoundationDB.Layers.Tuples;
 	using NUnit.Framework;
 	using System;
 	using System.Collections.Generic;
@@ -40,7 +41,7 @@ namespace FoundationDB.Linq.Tests
 	using System.Threading.Tasks;
 
 	[TestFixture]
-	public class FdbAsyncEnumerableFacts
+	public class FdbAsyncEnumerableFacts : FdbTest
 	{
 
 		[Test]
@@ -161,6 +162,88 @@ namespace FoundationDB.Linq.Tests
 			Assert.That(none, Is.False);
 
 			int count = await singleton.CountAsync();
+			Assert.That(count, Is.EqualTo(1));
+		}
+
+		[Test]
+		public async Task Test_Producer_Single()
+		{
+			// Func<T>
+
+			var singleton = FdbAsyncEnumerable.Single(() => 42);
+			Assert.That(singleton, Is.Not.Null);
+
+			using(var iterator = singleton.GetEnumerator())
+			{
+				var res = await iterator.MoveNext(this.Cancellation);
+				Assert.That(res, Is.True);
+				Assert.That(iterator.Current, Is.EqualTo(42));
+				res = await iterator.MoveNext(this.Cancellation);
+				Assert.That(res, Is.False);
+			}
+
+			var results = await singleton.ToListAsync();
+			Assert.That(results, Is.EqualTo(new int[] { 42 }));
+
+			bool any = await singleton.AnyAsync();
+			Assert.That(any, Is.True);
+
+			bool none = await singleton.NoneAsync();
+			Assert.That(none, Is.False);
+
+			int count = await singleton.CountAsync();
+			Assert.That(count, Is.EqualTo(1));
+
+			// Func<Task<T>>
+
+			singleton = FdbAsyncEnumerable.Single(() => Task.Delay(50).ContinueWith(_ => 42));
+			Assert.That(singleton, Is.Not.Null);
+
+			using (var iterator = singleton.GetEnumerator())
+			{
+				var res = await iterator.MoveNext(this.Cancellation);
+				Assert.That(res, Is.True);
+				Assert.That(iterator.Current, Is.EqualTo(42));
+				res = await iterator.MoveNext(this.Cancellation);
+				Assert.That(res, Is.False);
+			}
+
+			results = await singleton.ToListAsync();
+			Assert.That(results, Is.EqualTo(new int[] { 42 }));
+
+			any = await singleton.AnyAsync();
+			Assert.That(any, Is.True);
+
+			none = await singleton.NoneAsync();
+			Assert.That(none, Is.False);
+
+			count = await singleton.CountAsync();
+			Assert.That(count, Is.EqualTo(1));
+
+			// Func<CancellationToken, Task<T>>
+
+			singleton = FdbAsyncEnumerable.Single((ct) => Task.Delay(50, ct).ContinueWith(_ => 42));
+			Assert.That(singleton, Is.Not.Null);
+
+			using (var iterator = singleton.GetEnumerator())
+			{
+				var res = await iterator.MoveNext(this.Cancellation);
+				Assert.That(res, Is.True);
+				Assert.That(iterator.Current, Is.EqualTo(42));
+				res = await iterator.MoveNext(this.Cancellation);
+				Assert.That(res, Is.False);
+			}
+
+			results = await singleton.ToListAsync();
+			Assert.That(results, Is.EqualTo(new int[] { 42 }));
+
+			any = await singleton.AnyAsync();
+			Assert.That(any, Is.True);
+
+			none = await singleton.NoneAsync();
+			Assert.That(none, Is.False);
+
+			count = await singleton.CountAsync();
 			Assert.That(count, Is.EqualTo(1));
 		}
 
@@ -328,6 +411,7 @@ namespace FoundationDB.Linq.Tests
 			var results = await query.ToListAsync();
 			Assert.That(results, Is.EqualTo(new int[] { 31, 33, 35, 37, 39, 41 }));
 		}
+
 		[Test]
 		public async Task Test_Can_SelectMany()
 		{
@@ -418,6 +502,83 @@ namespace FoundationDB.Linq.Tests
 			first = await source.LastOrDefaultAsync();
 			Assert.That(first, Is.EqualTo(0));
 
+		}
+
+		[Test]
+		public async Task Test_Can_Get_ElementAt()
+		{
+			var source = Enumerable.Range(42, 10).ToAsyncEnumerable();
+
+			Assert.That(() => source.ElementAtAsync(-1).GetAwaiter().GetResult(), Throws.InstanceOf<ArgumentOutOfRangeException>());
+
+			int item = await source.ElementAtAsync(0);
+			Assert.That(item, Is.EqualTo(42));
+
+			item = await source.ElementAtAsync(5);
+			Assert.That(item, Is.EqualTo(47));
+
+			item = await source.ElementAtAsync(9);
+			Assert.That(item, Is.EqualTo(51));
+
+			Assert.That(() => source.ElementAtAsync(10).GetAwaiter().GetResult(), Throws.InstanceOf<InvalidOperationException>());
+
+			source = FdbAsyncEnumerable.Empty<int>();
+			Assert.That(() => source.ElementAtAsync(0).GetAwaiter().GetResult(), Throws.InstanceOf<InvalidOperationException>());
+		}
+
+		[Test]
+		public async Task Test_Can_Get_ElementAtOrDefault()
+		{
+			var source = Enumerable.Range(42, 10).ToAsyncEnumerable();
+
+			Assert.That(() => source.ElementAtOrDefaultAsync(-1).GetAwaiter().GetResult(), Throws.InstanceOf<ArgumentOutOfRangeException>());
+
+			int item = await source.ElementAtOrDefaultAsync(0);
+			Assert.That(item, Is.EqualTo(42));
+
+			item = await source.ElementAtOrDefaultAsync(5);
+			Assert.That(item, Is.EqualTo(47));
+
+			item = await source.ElementAtOrDefaultAsync(9);
+			Assert.That(item, Is.EqualTo(51));
+
+			item = await source.ElementAtOrDefaultAsync(10);
+			Assert.That(item, Is.EqualTo(0));
+
+			source = FdbAsyncEnumerable.Empty<int>();
+			item = await source.ElementAtOrDefaultAsync(0);
+			Assert.That(item, Is.EqualTo(0));
+			item = await source.ElementAtOrDefaultAsync(42);
+			Assert.That(item, Is.EqualTo(0));
+		}
+
+		[Test]
+		public async Task Test_Can_Distinct()
+		{
+			var items = new int[] { 1, 42, 7, 42, 9, 13, 7, 66 };
+			var source = items.ToAsyncEnumerable();
+
+			var distincts = await source.Distinct().ToListAsync();
+			Assert.That(distincts, Is.Not.Null.And.EqualTo(items.Distinct().ToList()));
+
+			var sequence = Enumerable.Range(0, 100).Select(x => (x * 1049) % 43);
+			source = sequence.ToAsyncEnumerable();
+			distincts = await source.Distinct().ToListAsync();
+			Assert.That(distincts, Is.Not.Null.And.EqualTo(sequence.Distinct().ToList()));
+		}
+
+		[Test]
+		public async Task Test_Can_Distinct_With_Comparer()
+		{
+			var items = new string[] { "World", "hello", "Hello", "world", "World!", "FileNotFound" };
+
+			var source = items.ToAsyncEnumerable();
+
+			var distincts = await source.Distinct(StringComparer.Ordinal).ToListAsync();
+			Assert.That(distincts, Is.Not.Null.And.EqualTo(items.Distinct(StringComparer.Ordinal).ToList()));
+
+			distincts = await source.Distinct(StringComparer.OrdinalIgnoreCase).ToListAsync();
+			Assert.That(distincts, Is.Not.Null.And.EqualTo(items.Distinct(StringComparer.OrdinalIgnoreCase).ToList()));
 		}
 
 		[Test]
@@ -536,6 +697,285 @@ namespace FoundationDB.Linq.Tests
 		}
 
 		[Test]
+		public async Task Test_Can_Min()
+		{
+			var rnd = new Random(1234);
+			var items = Enumerable.Range(0, 100).Select(_ => rnd.Next()).ToList();
+
+			var source = items.ToAsyncEnumerable();
+			int min = await source.MinAsync();
+			Assert.That(min, Is.EqualTo(items.Min()));
+
+			// if min is the first
+			items[0] = min - 1;
+			source = items.ToAsyncEnumerable();
+			min = await source.MinAsync();
+			Assert.That(min, Is.EqualTo(items.Min()));
+
+			// if min is the last
+			items[items.Count - 1] = min - 1;
+			source = items.ToAsyncEnumerable();
+			min = await source.MinAsync();
+			Assert.That(min, Is.EqualTo(items.Min()));
+
+			// empty should fail
+			source = FdbAsyncEnumerable.Empty<int>();
+			Assert.That(() => source.MinAsync().GetAwaiter().GetResult(), Throws.InstanceOf<InvalidOperationException>());
+		}
+
+		[Test]
+		public async Task Test_Can_Max()
+		{
+			var rnd = new Random(1234);
+			var items = Enumerable.Range(0, 100).Select(_ => rnd.Next()).ToList();
+
+			var source = items.ToAsyncEnumerable();
+			int max = await source.MaxAsync();
+			Assert.That(max, Is.EqualTo(items.Max()));
+
+			// if max is the first
+			items[0] = max + 1;
+			source = items.ToAsyncEnumerable();
+			max = await source.MaxAsync();
+			Assert.That(max, Is.EqualTo(items.Max()));
+
+			// if max is the last
+			items[items.Count - 1] = max + 1;
+			source = items.ToAsyncEnumerable();
+			max = await source.MaxAsync();
+			Assert.That(max, Is.EqualTo(items.Max()));
+
+			// empty should fail
+			source = FdbAsyncEnumerable.Empty<int>();
+			Assert.That(() => source.MaxAsync().GetAwaiter().GetResult(), Throws.InstanceOf<InvalidOperationException>());
+		}
+
+		[Test]
+		public async Task Test_Can_Sum_Signed()
+		{
+			var rnd = new Random(1234);
+			var items = Enumerable.Range(0, 100).Select(_ => (long)rnd.Next()).ToList();
+
+			var source = items.ToAsyncEnumerable();
+			long sum = await source.SumAsync();
+			long expected = 0;
+			foreach (var x in items) expected = checked(expected + x);
+			Assert.That(sum, Is.EqualTo(expected));
+
+			// empty should return 0
+			source = FdbAsyncEnumerable.Empty<long>();
+			sum = await source.SumAsync();
+			Assert.That(sum, Is.EqualTo(0));
+		}
+
+		[Test]
+		public async Task Test_Can_Sum_Unsigned()
+		{
+			var rnd = new Random(1234);
+			var items = Enumerable.Range(0, 100).Select(_ => (ulong)rnd.Next()).ToList();
+
+			var source = items.ToAsyncEnumerable();
+			ulong sum = await source.SumAsync();
+			ulong expected = 0;
+			foreach (var x in items) expected = checked(expected + x);
+			Assert.That(sum, Is.EqualTo(expected));
+
+			// empty should return 0
+			source = FdbAsyncEnumerable.Empty<ulong>();
+			sum = await source.SumAsync();
+			Assert.That(sum, Is.EqualTo(0));
+		}
+
+		[Test]
+		public async Task Test_Can_Batch()
+		{
+			var items = Enumerable.Range(0, 100).ToList();
+
+			var source = items.ToAsyncEnumerable();
+
+			// evenly divided
+
+			var query = source.Batch(20);
+			Assert.That(query, Is.Not.Null);
+
+			var results = await query.ToListAsync();
+			Assert.That(results, Is.Not.Null.And.Count.EqualTo(5));
+			Assert.That(results[0], Is.EqualTo(Enumerable.Range(0, 20).ToArray()));
+			Assert.That(results[1], Is.EqualTo(Enumerable.Range(20, 20).ToArray()));
+			Assert.That(results[2], Is.EqualTo(Enumerable.Range(40, 20).ToArray()));
+			Assert.That(results[3], Is.EqualTo(Enumerable.Range(60, 20).ToArray()));
+			Assert.That(results[4], Is.EqualTo(Enumerable.Range(80, 20).ToArray()));
+
+			// unevenly divided
+
+			query = source.Batch(32);
+			Assert.That(query, Is.Not.Null);
+
+			results = await query.ToListAsync();
+			Assert.That(results, Is.Not.Null.And.Count.EqualTo(4));
+			Assert.That(results[0], Is.EqualTo(Enumerable.Range(0, 32).ToArray()));
+			Assert.That(results[1], Is.EqualTo(Enumerable.Range(32, 32).ToArray()));
+			Assert.That(results[2], Is.EqualTo(Enumerable.Range(64, 32).ToArray()));
+			Assert.That(results[3], Is.EqualTo(Enumerable.Range(96, 4).ToArray()));
+
+			// empty
+
+			query = FdbAsyncEnumerable.Empty<int>().Batch(20);
+			Assert.That(query, Is.Not.Null);
+
+			results = await query.ToListAsync();
+			Assert.That(results, Is.Not.Null.And.Empty);
+		}
+
+		[Test]
+		public async Task Test_Can_Window()
+		{
+
+			// generate a source that stalls every 13 items, from 0 to 49
+
+			var source = new FdbAnonymousAsyncGenerator<int>((index, ct) =>
+			{
+				if (index >= 50) return Task.FromResult(Maybe.Nothing<int>());
+				if (index % 13 == 0) return Task.Delay(100).ContinueWith((_) => Maybe.Return((int)index));
+				return Task.FromResult(Maybe.Return((int)index));
+			});
+
+			// window size larger than sequence period
+
+			var query = source.Window(20);
+			Assert.That(query, Is.Not.Null);
+
+			var results = await query.ToListAsync();
+			Assert.That(results, Is.Not.Null.And.Count.EqualTo(4));
+			Assert.That(results[0], Is.EqualTo(Enumerable.Range(0, 13).ToArray()));
+			Assert.That(results[1], Is.EqualTo(Enumerable.Range(13, 13).ToArray()));
+			Assert.That(results[2], Is.EqualTo(Enumerable.Range(26, 13).ToArray()));
+			Assert.That(results[3], Is.EqualTo(Enumerable.Range(39, 11).ToArray()));
+
+			// window size smaller than sequence period
+
+			query = source.Window(10);
+			Assert.That(query, Is.Not.Null);
+
+			results = await query.ToListAsync();
+			//REVIEW: right now the Window operator will produce small windows at the end of a period which may not be the most efficient...
+			//TODO: optimize the implementation to try to squeeze out small buffers with only a couple items, and update this unit test!
+			Assert.That(results, Is.Not.Null.And.Count.EqualTo(8));
+			Assert.That(results[0], Is.EqualTo(Enumerable.Range(0, 10).ToArray()));
+			Assert.That(results[1], Is.EqualTo(Enumerable.Range(10, 3).ToArray()));
+			Assert.That(results[2], Is.EqualTo(Enumerable.Range(13, 10).ToArray()));
+			Assert.That(results[3], Is.EqualTo(Enumerable.Range(23, 3).ToArray()));
+			Assert.That(results[4], Is.EqualTo(Enumerable.Range(26, 10).ToArray()));
+			Assert.That(results[5], Is.EqualTo(Enumerable.Range(36, 3).ToArray()));
+			Assert.That(results[6], Is.EqualTo(Enumerable.Range(39, 10).ToArray()));
+			Assert.That(results[7], Is.EqualTo(Enumerable.Range(49, 1).ToArray()));
+		}
+
+		[Test]
+		public async Task Test_Can_Prefetch_On_Constant_Latency_Source()
+		{
+			int called = 0;
+			var sw = new Stopwatch();
+
+			Console.WriteLine("CONSTANT LATENCY GENERATOR:");
+
+			// this iterator waits on each item produced
+			var source = new FdbAnonymousAsyncGenerator<int>((index, ct) =>
+			{
+				Interlocked.Increment(ref called);
+				if (index >= 10) return Task.FromResult(Maybe.Nothing<int>());
+				return Task.Delay(15).ContinueWith((_) => Maybe.Return((int)index));
+			});
+
+			var results = await source.ToListAsync();
+			Assert.That(results, Is.Not.Null);
+			Assert.That(results, Is.EqualTo(Enumerable.Range(0, 10).ToList()));
+
+			// record the timing and call history to ensure that inner is called at least twice before the first item gets out
+
+			Func<int, FdbTuple<int, int>> record = (x) => FdbTuple.Create(x, Volatile.Read(ref called));
+
+			// without prefetching, the number of calls should match for the producer and the consumer
+			called = 0;
+			sw.Restart();
+			var withoutPrefetching = await source.Select(record).ToListAsync(this.Cancellation);
+			Console.WriteLine("P0: {0}", String.Join(", ", withoutPrefetching));
+			Assert.That(withoutPrefetching.Select(x => x.Item1), Is.EqualTo(Enumerable.Range(0, 10)));
+			Assert.That(withoutPrefetching.Select(x => x.Item2), Is.EqualTo(Enumerable.Range(1, 10)));
+
+			// with prefetching, the consumer should always have one item in advance
+			called = 0;
+			sw.Restart();
+			var withPrefetching1 = await source.Prefetch().Select(record).ToListAsync(this.Cancellation);
+			Console.WriteLine("P1: {0}", String.Join(", ", withPrefetching1));
+			Assert.That(withPrefetching1.Select(x => x.Item1), Is.EqualTo(Enumerable.Range(0, 10)));
+			Assert.That(withPrefetching1.Select(x => x.Item2), Is.EqualTo(Enumerable.Range(2, 10)));
+
+			// prefetching more than 1 item on a consumer that is not buffered should not change the picture (since we can only read one ahead anyway)
+			//REVIEW: maybe we should change the implementation of the operator so that it still prefetch items in the background if the rest of the query is lagging a bit?
+			called = 0;
+			sw.Restart();
+			var withPrefetching2 = await source.Prefetch(2).Select(record).ToListAsync(this.Cancellation);
+			Console.WriteLine("P2: {0}", String.Join(", ", withPrefetching2));
+			Assert.That(withPrefetching2.Select(x => x.Item1), Is.EqualTo(Enumerable.Range(0, 10)));
+			Assert.That(withPrefetching2.Select(x => x.Item2), Is.EqualTo(Enumerable.Range(2, 10)));
+		}
+
+		[Test]
+		public async Task Test_Can_Prefetch_On_Bursty_Source()
+		{
+			int called = 0;
+			var sw = new Stopwatch();
+
+			Console.WriteLine("BURSTY GENERATOR:");
+
+			// this iterator produce burst of items
+			var source = new FdbAnonymousAsyncGenerator<int>((index, ct) =>
+			{
+				Interlocked.Increment(ref called);
+				if (index >= 10) return Task.FromResult(Maybe.Nothing<int>());
+				if (index % 4 == 0) return Task.Delay(100).ContinueWith((_) => Maybe.Return((int)index));
+				return Task.FromResult(Maybe.Return((int)index));
+			});
+
+			Func<int, FdbTuple<int, int, TimeSpan>> record = (x) =>
+			{
+				var res = FdbTuple.Create(x, Volatile.Read(ref called), sw.Elapsed);
+				sw.Restart();
+				return res;
+			};
+
+			// without prefetching, the number of calls should match for the producer and the consumer
+			called = 0;
+			sw.Restart();
+			var withoutPrefetching = await source.Select(record).ToListAsync(this.Cancellation);
+			Console.WriteLine("P0: {0}", String.Join(", ", withoutPrefetching));
+			Assert.That(withoutPrefetching.Select(x => x.Item1), Is.EqualTo(Enumerable.Range(0, 10)));
+
+			// with prefetching K, the consumer should always have K items in advance
+			//REVIEW: maybe we should change the implementation of the operator so that it still prefetch items in the background if the rest of the query is lagging a bit?
+			for (int K = 1; K <= 4; K++)
+			{
+				called = 0;
+				sw.Restart();
+				var withPrefetchingK = await source.Prefetch(K).Select(record).ToListAsync(this.Cancellation);
+				Console.WriteLine("P{0}: {1}", K, String.Join(", ", withPrefetchingK));
+				Assert.That(withPrefetchingK.Select(x => x.Item1), Is.EqualTo(Enumerable.Range(0, 10)));
+				Assert.That(withPrefetchingK[0].Item2, Is.EqualTo(K + 1), "Generator must have {0} call(s) in advance!", K);
+				Assert.That(withPrefetchingK.Select(x => x.Item2), Is.All.LessThanOrEqualTo(11));
+			}
+
+			// if prefecthing more than the period of the producer, we should not have any perf gain
+			called = 0;
+			sw.Restart();
+			var withPrefetching5 = await source.Prefetch(5).Select(record).ToListAsync(this.Cancellation);
+			Console.WriteLine("P5: {0}", String.Join(", ", withPrefetching5));
+			Assert.That(withPrefetching5.Select(x => x.Item1), Is.EqualTo(Enumerable.Range(0, 10)));
+			Assert.That(withPrefetching5[0].Item2, Is.EqualTo(5), "Generator must have only 4 calls in advance because it only produces 4 items at a time!");
+			Assert.That(withPrefetching5.Select(x => x.Item2), Is.All.LessThanOrEqualTo(11));
+		}
+
+		[Test]
 		public async Task Test_Can_Select_Anonymous_Types()
 		{
 			var source = Enumerable.Range(0, 10).ToAsyncEnumerable();
@@ -559,7 +999,7 @@ namespace FoundationDB.Linq.Tests
 		{
 			// ensure that we can also use the "from ... select ... where" syntax
 
-			var results = await 
+			var results = await
 				(from x in Enumerable.Range(0, 10).ToAsyncEnumerable()
 				let t = new { Value = x, Square = x * x, Root = Math.Sqrt(x), Odd = x % 2 == 1 }
 				where t.Odd
@@ -719,7 +1159,7 @@ namespace FoundationDB.Linq.Tests
 						else if (msg.HasValue)
 						{
 							Console.WriteLine("[consumer] Got error: " + msg.Error);
-							msg.ThrowIfFailed();
+							msg.ThrowForNonSuccess();
 							break;
 						}
 						else
@@ -846,7 +1286,7 @@ namespace FoundationDB.Linq.Tests
 			}
 
 		}
-	
+
 		private static async Task VerifyResult<T>(Func<Task<T>> asyncQuery, Func<T> referenceQuery, IQueryable<T> witness, string label)
 		{
 			Exception asyncError = null;
@@ -934,7 +1374,7 @@ namespace FoundationDB.Linq.Tests
 			// note: we will also create a third LINQ query using lambda expressions, just to be able to have a nicer ToString() in case of errors
 
 			int[] SourceOfInts = new int[] { 1, 7, 42, -456, 123, int.MaxValue, -1, 1023, 0, short.MinValue, 5, 13, -273, 2013, 4534, -999 };
-			
+
 			const int N = 1000;
 
 			var rnd = new Random(); // new Random(1234)
@@ -1033,7 +1473,7 @@ namespace FoundationDB.Linq.Tests
 						break;
 					}
 					case 1:
-					{ // only take 1 
+					{ // only take 1
 						query = query.Take(1);
 						reference = reference.Take(1);
 						witness = witness.Take(1);
@@ -1114,10 +1554,44 @@ namespace FoundationDB.Linq.Tests
 				);
 
 			}
-			
 
 		}
 
+		[Test]
+		public async Task Test_Record_Items()
+		{
+
+			var items = Enumerable.Range(0, 10);
+			var source = items.ToAsyncEnumerable();
+
+			var before = new List<int>();
+			var after = new List<int>();
+
+			var a = source.Observe((x) => before.Add(x));
+			var b = a.Where((x) => x % 2 == 1);
+			var c = b.Observe((x) => after.Add(x));
+			var d = c.Select((x) => x + 1);
+
+			var query = source
+				.Observe((x) => before.Add(x))
+				.Where((x) => x % 2 == 1)
+				.Observe((x) => after.Add(x))
+				.Select((x) => x + 1);
+
+			Console.WriteLine("query: " + query);
+
+			var results = await query.ToListAsync();
+
+			Console.WriteLine("input : " + String.Join(", ", items));
+			Console.WriteLine("before: " + String.Join(", ", before));
+			Console.WriteLine("after : " + String.Join(", ", after));
+			Console.WriteLine("output: " + String.Join(", ", results));
+
+			Assert.That(before, Is.EqualTo(Enumerable.Range(0, 10).ToList()));
+			Assert.That(after, Is.EqualTo(Enumerable.Range(0, 10).Where(x => x % 2 == 1).ToList()));
+			Assert.That(results, Is.EqualTo(Enumerable.Range(1, 5).Select(x => x * 2).ToList()));
+
+		}
 	}
 
 }

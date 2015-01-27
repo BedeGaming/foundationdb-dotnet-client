@@ -26,12 +26,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #endregion
 
-#define TRACE_COUNTING
+#undef TRACE_COUNTING
 
 namespace FoundationDB.Client
 {
+	using FoundationDB.Client.Status;
 	using FoundationDB.Client.Utils;
-	using FoundationDB.Filters.Logging;
 	using FoundationDB.Layers.Tuples;
 	using JetBrains.Annotations;
 	using System;
@@ -81,6 +81,49 @@ namespace FoundationDB.Client
 			/// <summary>"\xFF/workers/(ip:port)/..." => datacenter + machine + mclass</summary>
 			public static readonly Slice WorkersPrefix = Slice.FromAscii("\xFF/workers/");
 
+			#region JSON Status
+
+			private static readonly Slice StatusJsonKey = Slice.FromAscii("\xFF\xFF/status/json");
+
+			public static async Task<FdbSystemStatus> GetStatusAsync([NotNull] IFdbReadOnlyTransaction trans)
+			{
+				if (trans == null) throw new ArgumentNullException("trans");
+
+				Slice data = await trans.GetAsync(StatusJsonKey).ConfigureAwait(false);
+
+				if (data.IsNullOrEmpty) return null;
+
+				string jsonText = data.ToUnicode();
+
+				var doc = TinyJsonParser.ParseObject(jsonText);
+				if (doc == null) return null;
+
+				long rv = 0;
+				if (doc.ContainsKey("cluster"))
+				{
+					rv = await trans.GetReadVersionAsync();
+				}
+
+				return new FdbSystemStatus(doc, rv, jsonText);
+			}
+
+			public static async Task<FdbSystemStatus> GetStatusAsync([NotNull] IFdbDatabase db, CancellationToken ct)
+			{
+				if (db == null) throw new ArgumentNullException("db");
+
+				// we should not retry the read to the status key!
+				using (var trans = db.BeginReadOnlyTransaction(ct))
+				{
+					trans.WithPrioritySystemImmediate();
+					//note: in v3.x, the status key does not need the access to system key option.
+
+					//TODO: set a custom timeout?
+					return await GetStatusAsync(trans);
+				}
+			}
+
+			#endregion
+
 			/// <summary>Returns an object describing the list of the current coordinators for the cluster</summary>
 			/// <param name="db">Database to use for the operation</param>
 			/// <param name="cancellationToken">Token used to cancel the operation</param>
@@ -91,8 +134,8 @@ namespace FoundationDB.Client
 
 				var coordinators = await db.ReadAsync((tr) =>
 				{
-					tr.SetOption(FdbTransactionOption.AccessSystemKeys);
-					tr.SetOption(FdbTransactionOption.PrioritySystemImmediate);
+					tr.WithReadAccessToSystemKeys();
+					tr.WithPrioritySystemImmediate();
 					//note: we ask for high priotity, because this method maybe called by a monitoring system than has to run when the cluster is clogged up in requests
 
 					return tr.GetAsync(Fdb.System.Coordinators);
@@ -115,8 +158,8 @@ namespace FoundationDB.Client
 
 				return db.ReadAsync<Slice>((tr) =>
 				{
-					tr.SetOption(FdbTransactionOption.AccessSystemKeys);
-					tr.SetOption(FdbTransactionOption.PrioritySystemImmediate);
+					tr.WithReadAccessToSystemKeys();
+					tr.WithPrioritySystemImmediate();
 					//note: we ask for high priotity, because this method maybe called by a monitoring system than has to run when the cluster is clogged up in requests
 
 					return tr.GetAsync(Fdb.System.ConfigKey(name));
@@ -271,11 +314,11 @@ namespace FoundationDB.Client
 			{
 				Contract.Requires(trans != null && end >= begin);
 
-#if TRACE_COUTING
+#if TRACE_COUNTING
 				trans.Annotate("Get boundary keys in range {0}", FdbKeyRange.Create(begin, end));
 #endif
 
-				trans.WithAccessToSystemKeys();
+				trans.WithReadAccessToSystemKeys();
 
 				var results = new List<Slice>();
 				int iterations = 0;
@@ -317,11 +360,11 @@ namespace FoundationDB.Client
 							await trans.OnErrorAsync(error.Code).ConfigureAwait(false);
 						}
 						iterations = 0;
-						trans.WithAccessToSystemKeys();
+						trans.WithReadAccessToSystemKeys();
 					}
 				}
 
-#if TRACE_COUTING
+#if TRACE_COUNTING
 				if (results.Count == 0)
 				{
 					trans.Annotate("There is no chunk boundary in range {0}", FdbKeyRange.Create(begin, end));
@@ -397,12 +440,12 @@ namespace FoundationDB.Client
 
 				using (var tr = db.BeginReadOnlyTransaction(cancellationToken))
 				{
-#if TRACE_COUTING
+#if TRACE_COUNTING
 					tr.Annotate("Estimating number of keys in range {0}", FdbKeyRange.Create(beginInclusive, endExclusive));
 #endif
 
 					tr.SetOption(FdbTransactionOption.ReadYourWritesDisable);
-		
+
 					// start looking for the first key in the range
 					cursor = await tr.Snapshot.GetKeyAsync(FdbKeySelector.FirstGreaterOrEqual(cursor)).ConfigureAwait(false);
 					if (cursor >= end)
@@ -411,7 +454,9 @@ namespace FoundationDB.Client
 					}
 
 					// we already have seen one key, so add it to the count
+#if TRACE_COUNTING
 					int iter = 1;
+#endif
 					long counter = 1;
 					// start with a medium-sized window
 					int windowSize = INIT_WINDOW_SIZE;
@@ -427,7 +472,9 @@ namespace FoundationDB.Client
 						try
 						{
 							next = await tr.Snapshot.GetKeyAsync(selector).ConfigureAwait(false);
+#if TRACE_COUNTING
 							++iter;
+#endif
 						}
 						catch (FdbException e)
 						{
@@ -463,7 +510,7 @@ namespace FoundationDB.Client
 
 							if (windowSize <= MIN_WINDOW_SIZE)
 							{ // The window is small enough to switch to reading for counting (will be faster than binary search)
-#if TRACE_COUTING
+#if TRACE_COUNTING
 								tr.Annotate("Switch to reading all items (window size = {0})", windowSize);
 #endif
 
@@ -479,7 +526,9 @@ namespace FoundationDB.Client
 
 								counter += n;
 								if (onProgress != null) onProgress.Report(FdbTuple.Create(counter, end));
+#if TRACE_COUNTING
 								++iter;
+#endif
 								break;
 							}
 
@@ -497,7 +546,7 @@ namespace FoundationDB.Client
 							windowSize = Math.Min(windowSize << 1, MAX_WINDOW_SIZE);
 						}
 					}
-#if TRACE_COUTING
+#if TRACE_COUNTING
 					tr.Annotate("Found {0} keys in {1} iterations", counter, iter);
 #endif
 					return counter;

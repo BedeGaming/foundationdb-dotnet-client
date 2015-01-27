@@ -70,7 +70,7 @@ namespace FoundationDB.Layers.Collections
 		public FdbQueue([NotNull] FdbSubspace subspace, bool highContention, [NotNull] IValueEncoder<T> encoder)
 		{
 			if (subspace == null) throw new ArgumentNullException("subspace");
-			if (encoder == null) throw new ArgumentNullException("encocer");
+			if (encoder == null) throw new ArgumentNullException("encoder");
 
 			this.Subspace = subspace;
 			this.HighContention = highContention;
@@ -97,7 +97,7 @@ namespace FoundationDB.Layers.Collections
 		internal FdbSubspace QueueItem { get; private set; }
 
 		/// <summary>Remove all items from the queue.</summary>
-		public void ClearAsync([NotNull] IFdbTransaction trans)
+		public void Clear([NotNull] IFdbTransaction trans)
 		{
 			if (trans == null) throw new ArgumentNullException("trans");
 

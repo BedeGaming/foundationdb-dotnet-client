@@ -139,8 +139,6 @@ namespace FoundationDB.Client
 				{
 					if (!m_iterators[i].Active) continue;
 
-					var state = m_iterators[i];
-
 					if (!m_iterators[i].HasCurrent)
 					{
 						if (!await m_iterators[i].Next.ConfigureAwait(false))

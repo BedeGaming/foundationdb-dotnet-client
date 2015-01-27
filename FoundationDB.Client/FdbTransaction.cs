@@ -44,9 +44,10 @@ namespace FoundationDB.Client
 
 	/// <summary>FounrationDB transaction handle.</summary>
 	/// <remarks>An instance of this class can be used to read from and/or write to a snapshot of a FoundationDB database.</remarks>
-	[DebuggerDisplay("Id={Id}, StillAlive={StillAlive}")]
-	public sealed partial class FdbTransaction : IFdbTransaction, IFdbReadOnlyTransaction, IDisposable
+	[DebuggerDisplay("Id={Id}, StillAlive={StillAlive}, Size={Size}")]
+	public sealed partial class FdbTransaction : IFdbTransaction, IFdbReadOnlyTransaction
 	{
+
 		#region Private Members...
 
 		internal const int STATE_INIT = 0;
@@ -79,6 +80,9 @@ namespace FoundationDB.Client
 
 		/// <summary>Retry Limit of this transaction</summary>
 		private int m_retryLimit;
+
+		/// <summary>Max Retry Delay (in ms) of this transaction</summary>
+		private int m_maxRetryDelay;
 
 		/// <summary>Cancelletation source specific to this instance.</summary>
 		private readonly CancellationTokenSource m_cts;
@@ -162,7 +166,11 @@ namespace FoundationDB.Client
 
 		#region Properties...
 
-		/// <summary>Timeout in milliseconds which, when elapsed, will cause the transaction automatically to be cancelled. Valid parameter values are ``[0, INT_MAX]``. If set to 0, will disable all timeouts. All pending and any future uses of the transaction will throw an exception. The transaction can be used again after it is reset.</summary>
+		/// <summary>Timeout in milliseconds which, when elapsed, will cause the transaction automatically to be cancelled.
+		/// Valid parameter values are [0, int.MaxValue].
+		/// If set to 0, will disable all timeouts.
+		/// All pending and any future uses of the transaction will throw an exception.
+		/// The transaction can be used again after it is reset.</summary>
 		public int Timeout
 		{
 			get { return m_timeout; }
@@ -174,15 +182,33 @@ namespace FoundationDB.Client
 			}
 		}
 
-		/// <summary>Maximum number of retries after which additional calls to onError will throw the most recently seen error code. Valid parameter values are ``[-1, INT_MAX]``. If set to -1, will disable the retry limit.</summary>
+		/// <summary>Maximum number of retries after which additional calls to onError will throw the most recently seen error code.
+		/// Valid parameter values are [-1, int.MaxValue].
+		/// If set to -1, will disable the retry limit.
+		/// </summary>
 		public int RetryLimit
 		{
 			get { return m_retryLimit; }
 			set
 			{
-				if (value < 0) throw new ArgumentOutOfRangeException("value", value, "Retry count cannot be negative");
+				if (value < -1) throw new ArgumentOutOfRangeException("value", value, "Retry count cannot be negative");
 				SetOption(FdbTransactionOption.RetryLimit, value);
 				m_retryLimit = value;
+			}
+		}
+
+		/// <summary>Maximum amount of backoff delay incurred in the call to onError if the error is retryable.
+		/// Defaults to 1000 ms. Valid parameter values are [0, int.MaxValue].
+		/// If the maximum retry delay is less than the current retry delay of the transaction, then the current retry delay will be clamped to the maximum retry delay.
+		/// </summary>
+		public int MaxRetryDelay
+		{
+			get { return m_maxRetryDelay; }
+			set
+			{
+				if (value < 0) throw new ArgumentOutOfRangeException("value", value, "Max retry delay cannot be negative");
+				SetOption(FdbTransactionOption.MaxRetryDelay, value);
+				m_maxRetryDelay = value;
 			}
 		}
 
@@ -449,22 +475,69 @@ namespace FoundationDB.Client
 
 		#region Atomic Ops...
 
-		/// <summary>
-		/// Modify the database snapshot represented by this transaction to perform the operation indicated by <paramref name="mutation"/> with operand <paramref name="param"/> to the value stored by the given key.
-		/// </summary>
+		/// <summary>Checks that this type of mutation is supported by the currently selected API level</summary>
+		/// <param name="mutation">Mutation type</param>
+		/// <param name="selectedApiVersion">Select API level (200, 300, ...)</param>
+		/// <exception cref="FdbException">An error with code <see cref="FdbError.InvalidMutationType"/> if the type of mutation is not supported by this API level.</exception>
+		private static void EnsureMutationTypeIsSupported(FdbMutationType mutation, int selectedApiVersion)
+		{
+			if (selectedApiVersion < 200)
+			{ // mutations were not available at this time
+
+				if (Fdb.GetMaxApiVersion() >= 200)
+				{ // but the installed client could support it
+					throw new FdbException(FdbError.InvalidMutationType, "Atomic mutations are only supported starting from API level 200. You need to select API level 200 or more at the start of your process.");
+				}
+				else
+				{ // not supported by the local client
+					throw new FdbException(FdbError.InvalidMutationType, "Atomic mutations are only supported starting from client version 2.x. You need to update the version of the client, and select API level 200 or more at the start of your process.");
+				}
+			}
+
+			if (mutation == FdbMutationType.Add || mutation == FdbMutationType.BitAnd || mutation == FdbMutationType.BitOr || mutation == FdbMutationType.BitXor )
+			{ // these mutations are available since v200
+				return;
+			}
+
+			if (mutation == FdbMutationType.Max || mutation == FdbMutationType.Min)
+			{ // these mutations are available since v300
+				if (selectedApiVersion < 300)
+				{
+					if (Fdb.GetMaxApiVersion() >= 300)
+					{
+						throw new FdbException(FdbError.InvalidMutationType, "Atomic mutations Max and Min are only supported starting from API level 300. You need to select API level 300 or more at the start of your process.");
+					}
+					else
+					{
+						throw new FdbException(FdbError.InvalidMutationType, "Atomic mutations Max and Min are only supported starting from client version 3.x. You need to update the version of the client, and select API level 300 or more at the start of your process..");
+					}
+				}
+				// ok!
+				return;
+			}
+
+			// this could be a new mutation type, or an invalid value.
+			throw new FdbException(FdbError.InvalidMutationType, "An invalid mutation type was issued. If you are attempting to call a new mutation type, you will need to update the version of this assembly, and select the latest API level.");
+		}
+
+		/// <summary>Modify the database snapshot represented by this transaction to perform the operation indicated by <paramref name="mutation"/> with operand <paramref name="param"/> to the value stored by the given key.</summary>
 		/// <param name="key">Name of the key whose value is to be mutated.</param>
 		/// <param name="param">Parameter with which the atomic operation will mutate the value associated with key_name.</param>
 		/// <param name="mutation">Type of mutation that should be performed on the key</param>
 		public void Atomic(Slice key, Slice param, FdbMutationType mutation)
 		{
+			//note: this method as many names in the various bindings:
+			// - C API   : fdb_transaction_atomic_op(...)
+			// - Java    : tr.Mutate(..)
+			// - Node.js : tr.add(..), tr.max(..), ...
+
 			EnsureCanWrite();
 
 			m_database.EnsureKeyIsValid(ref key);
 			m_database.EnsureValueIsValid(ref param);
 
 			//The C API does not fail immediately if the mutation type is not valid, and only fails at commit time.
-			if (mutation != FdbMutationType.Add && mutation != FdbMutationType.BitAnd && mutation != FdbMutationType.BitOr && mutation != FdbMutationType.BitXor)
-				throw new FdbException(FdbError.InvalidMutationType, "An invalid mutation type was issued");
+			EnsureMutationTypeIsSupported(mutation, Fdb.ApiVersion);
 
 #if DEBUG
 			if (Logging.On && Logging.IsVerbose) Logging.Verbose(this, "AtomicCore", String.Format("Atomic {0} on '{1}' = {2}", mutation.ToString(), FdbKey.Dump(key), Slice.Dump(param)));
@@ -602,7 +675,7 @@ namespace FoundationDB.Client
 		}
 
 		#endregion
-		
+
 		#region Watches...
 
 		/// <summary>
@@ -669,12 +742,17 @@ namespace FoundationDB.Client
 			// resetting the state of a transaction automatically clears the RetryLimit and Timeout settings
 			// => we need to set the again!
 
-			m_retryLimit = 0;
 			m_timeout = 0;
+			m_retryLimit = 0;
+			m_maxRetryDelay = 0;
 
 			if (m_database.DefaultRetryLimit > 0)
 			{
 				this.RetryLimit = m_database.DefaultRetryLimit;
+			}
+			if (m_database.DefaultMaxRetryDelay > 0)
+			{
+				this.MaxRetryDelay = m_database.DefaultMaxRetryDelay;
 			}
 			if (m_database.DefaultTimeout > 0)
 			{
@@ -858,7 +936,6 @@ namespace FoundationDB.Client
 					m_cts.Dispose();
 				}
 			}
-			GC.SuppressFinalize(this);
 		}
 
 		#endregion

@@ -34,7 +34,6 @@ namespace FoundationDB.Async
 	using JetBrains.Annotations;
 	using System;
 	using System.Collections.Generic;
-	using System.Diagnostics;
 	using System.Runtime.ExceptionServices;
 	using System.Threading;
 	using System.Threading.Tasks;
@@ -108,6 +107,20 @@ namespace FoundationDB.Async
 			}
 		}
 
+#if NET_4_0
+		public override void OnError(Exception error)
+		{
+			lock (m_lock)
+			{
+				if (!m_done)
+				{
+					LogProducer("Error received: " + error.Message);
+					m_queue.Enqueue(Maybe.Error<T>(error));
+					WakeUpBlockedConsumer_NeedsLocking();
+				}
+			}
+		}
+#else
 		public override void OnError(ExceptionDispatchInfo error)
 		{
 			lock (m_lock)
@@ -120,6 +133,7 @@ namespace FoundationDB.Async
 				}
 			}
 		}
+#endif
 
 		private void Enqueue_NeedsLocking(Maybe<T> value)
 		{
@@ -133,6 +147,8 @@ namespace FoundationDB.Async
 
 		private async Task WaitForNextFreeSlotThenEnqueueAsync(T value, Task wait, CancellationToken ct)
 		{
+			ct.ThrowIfCancellationRequested();
+
 			await wait.ConfigureAwait(false);
 
 			LogProducer("Wake up because one slot got freed");

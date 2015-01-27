@@ -105,6 +105,36 @@ namespace FoundationDB.Client.Converters
 			}
 		}
 
+		private class SubClass<T, R> : IFdbConverter<T, R>
+		{
+			public static readonly IFdbConverter<T, R> Default = new SubClass<T, R>();
+
+			private SubClass()
+			{
+				if (!typeof(R).IsAssignableFrom(typeof(T))) throw new InvalidOperationException(String.Format("Type {0} is not a subclass of {1}", typeof(T).Name, typeof(R).Name));
+			}
+
+			public R Convert(T value)
+			{
+				return (R)(object)value;
+			}
+
+			public Type Source
+			{
+				get { return typeof(T); }
+			}
+
+			public Type Destination
+			{
+				get { return typeof(R); }
+			}
+
+			public object ConvertBoxed(object value)
+			{
+				return value;
+			}
+		}
+
 		#endregion
 
 		/// <summary>Static ctor that initialize the default converters</summary>
@@ -112,25 +142,6 @@ namespace FoundationDB.Client.Converters
 		{
 			RegisterDefaultConverters();
 		}
-
-#if REFACTORED
-		private sealed class TypePairComparer : IEqualityComparer<KeyValuePair<Type, Type>>
-		{ // REVIEW: this is redundant with ConversionHelper.TypePairComparer!
-
-			public bool Equals(KeyValuePair<Type, Type> x, KeyValuePair<Type, Type> y)
-			{
-				return x.Key == y.Key && x.Value == y.Value;
-			}
-
-			public int GetHashCode(KeyValuePair<Type, Type> obj)
-			{
-				int h = 27;
-				h = (h * 31) ^ (obj.Key != null ? obj.Key.GetHashCode() : 0);
-				h = (h * 31) ^ (obj.Value != null ? obj.Value.GetHashCode() : 0);
-				return h;
-			}
-		}
-#endif
 
 		/// <summary>Map of all known converters from T to R</summary>
 		/// <remarks>No locking required, because all changes will replace this instance with a new Dictionary</remarks>
@@ -366,6 +377,11 @@ namespace FoundationDB.Client.Converters
 			IFdbConverter converter;
 			if (!Converters.TryGetValue(new ComparisonHelper.TypePair(typeof(T), typeof(R)), out converter))
 			{
+				if (typeof(R).IsAssignableFrom(typeof(T)))
+				{ // T is a subclass of R, so it should work fine
+					return SubClass<T, R>.Default;
+				}
+
 				//TODO: ..?
 				FailCannotConvert(typeof(T), typeof(R));
 			}

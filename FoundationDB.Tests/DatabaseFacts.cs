@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace FoundationDB.Client.Tests
 {
 	using FoundationDB.Client;
+	using FoundationDB.Client.Status;
 	using FoundationDB.Layers.Tuples;
 	using NUnit.Framework;
 	using System;
@@ -228,7 +229,7 @@ namespace FoundationDB.Client.Tests
 
 				// in order to verify the value, we need to check ourselves by reading from the cluster config
 				Slice actual;
-				using(var tr = db.BeginReadOnlyTransaction(this.Cancellation).WithAccessToSystemKeys())
+				using (var tr = db.BeginReadOnlyTransaction(this.Cancellation).WithReadAccessToSystemKeys())
 				{
 					actual = await tr.GetAsync(Slice.FromAscii("\xFF/conf/storage_engine"));
 				}
@@ -242,6 +243,27 @@ namespace FoundationDB.Client.Tests
 					Assert.That(actual, Is.EqualTo(Slice.FromAscii("1")));
 				}
 			}
+		}
+
+		[Test]
+		public async Task Test_Can_Get_System_Status()
+		{
+
+			using (var db = await OpenTestDatabaseAsync())
+			{
+				var status = await Fdb.System.GetStatusAsync(db, this.Cancellation);
+				Assert.That(status, Is.Not.Null);
+
+				Assert.That(status.Client, Is.Not.Null);
+				Assert.That(status.Client.Messages, Is.Not.Null);
+
+				Assert.That(status.Cluster, Is.Not.Null);
+				Assert.That(status.Cluster.Messages, Is.Not.Null);
+				Assert.That(status.Cluster.Data, Is.Not.Null);
+				Assert.That(status.Cluster.Qos, Is.Not.Null);
+				Assert.That(status.Cluster.Workload, Is.Not.Null);
+			}
+
 		}
 
 		[Test]
