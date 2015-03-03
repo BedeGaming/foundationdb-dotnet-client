@@ -830,12 +830,19 @@ namespace FoundationDB.Client
 			return value.ToSlice();
 		}
 
+		internal static readonly Encoding DefaultEncoding =
+#if CORE_CLR
+			Encoding.GetEncoding(0);
+#else
+			Encoding.Default;
+#endif
+
 		/// <summary>Dangerously create a slice containing string converted to ASCII. All non-ASCII characters may be corrupted or converted to '?'</summary>
 		/// <remarks>WARNING: if you put a string that contains non-ASCII chars, it will be silently corrupted! This should only be used to store keywords or 'safe' strings.
 		/// Note: depending on your default codepage, chars from 128 to 255 may be preserved, but only if they are decoded using the same codepage at the other end !</remarks>
 		public static Slice FromAscii(string text)
 		{
-			return text == null ? Slice.Nil : text.Length == 0 ? Slice.Empty : Slice.Create(Encoding.Default.GetBytes(text));
+			return text == null ? Slice.Nil : text.Length == 0 ? Slice.Empty : Slice.Create(DefaultEncoding.GetBytes(text));
 		}
 
 		/// <summary>Create a slice containing the UTF-8 bytes of the string <paramref name="value"/></summary>
@@ -964,7 +971,7 @@ namespace FoundationDB.Client
 		{
 			if (this.Count == 0) return this.HasValue ? String.Empty : default(string);
 			SliceHelpers.EnsureSliceIsValid(ref this);
-			return Encoding.Default.GetString(this.Array, this.Offset, this.Count);
+			return Slice.DefaultEncoding.GetString(this.Array, this.Offset, this.Count);
 		}
 
 		/// <summary>Stringify a slice containing an UTF-8 encoded string</summary>
@@ -1030,7 +1037,8 @@ namespace FoundationDB.Client
 			return sb.ToString();
 		}
 
-		private static StringBuilder EscapeString(StringBuilder sb, byte[] buffer, int offset, int count, Encoding encoding)
+		[NotNull]
+		private static StringBuilder EscapeString(StringBuilder sb, [NotNull] byte[] buffer, int offset, int count, [NotNull] Encoding encoding)
 		{
 			if (sb == null) sb = new StringBuilder(count + 16);
 			foreach(var c in encoding.GetChars(buffer, offset, count))
@@ -1118,6 +1126,18 @@ namespace FoundationDB.Client
 			if (this.Count > 1) throw new FormatException("Cannot convert slice into a Byte because it is larger than 1 byte");
 			SliceHelpers.EnsureSliceIsValid(ref this);
 			return this.Array[this.Offset];
+		}
+
+		/// <summary>Converts a slice into a signed byte (-128..+127)</summary>
+		/// <returns>Value of the first and only byte of the slice, or 0 if the slice is null or empty.</returns>
+		/// <exception cref="System.FormatException">If the slice has more than one byte</exception>
+		[Pure]
+		public sbyte ToSByte()
+		{
+			if (this.Count == 0) return 0;
+			if (this.Count > 1) throw new FormatException("Cannot convert slice into an SByte because it is larger than 1 byte");
+			SliceHelpers.EnsureSliceIsValid(ref this);
+			return (sbyte)this.Array[this.Offset];
 		}
 
 		/// <summary>Converts a slice into a boolean.</summary>
@@ -2385,6 +2405,7 @@ namespace FoundationDB.Client
 
 		#endregion
 
+		[UsedImplicitly(ImplicitUseTargetFlags.WithMembers)]
 		private sealed class DebugView
 		{
 			private readonly Slice m_slice;
@@ -2396,7 +2417,23 @@ namespace FoundationDB.Client
 
 			public byte[] Data
 			{
-				get { return m_slice.GetBytes(); }
+				get
+				{
+					if (m_slice.Count == 0) return m_slice.Array == null ? null : EmptyArray;
+					if (m_slice.Offset == 0 && m_slice.Count == m_slice.Array.Length) return m_slice.Array;
+					var tmp = new byte[m_slice.Count];
+					System.Array.Copy(m_slice.Array, m_slice.Offset, tmp, 0, m_slice.Count);
+					return tmp;
+				}
+			}
+
+			public string Text
+			{
+				get
+				{
+					if (m_slice.Count == 0) return m_slice.Array == null ? null : String.Empty;
+					return m_slice.ToAsciiOrHexaString();
+				}
 			}
 
 			public int Count
