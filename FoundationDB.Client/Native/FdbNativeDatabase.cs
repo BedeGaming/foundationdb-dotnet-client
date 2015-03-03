@@ -56,20 +56,6 @@ namespace FoundationDB.Client.Native
 #endif
 		}
 
-		//REVIEW: do we really need a destructor ? The handle is a SafeHandle, and will take care of itself...
-		~FdbNativeDatabase()
-		{
-#if CAPTURE_STACKTRACES
-			Trace.WriteLine("A database handle (" + m_handle + ") was leaked by " + m_stackTrace);
-#endif
-#if DEBUG
-			// If you break here, that means that a native database handler was leaked by a FdbDatabase instance (or that the database instance was leaked)
-			if (Debugger.IsAttached) Debugger.Break();
-#endif
-			Dispose(false);
-		}
-
-
 		public bool IsInvalid { get { return m_handle.IsInvalid; } }
 
 		public bool IsClosed { get { return m_handle.IsClosed; } }
